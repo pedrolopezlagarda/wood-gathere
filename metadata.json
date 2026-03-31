@@ -1,0 +1,5 @@
+{
+  "name": "Wood Gatherer",
+  "description": "A simple simulation of a pixel gathering wood from trees and bringing it back to a house.",
+  "requestFramePermissions": []
+}
