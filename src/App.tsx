@@ -84,31 +84,31 @@ export default function App() {
 
   useEffect(() => {
     const imgHouse = new Image();
-    imgHouse.src = '/casa.png';
+    imgHouse.src = `${import.meta.env.BASE_URL}casa.png`;
     imgHouse.onload = () => {
       houseImageRef.current = imgHouse;
     };
 
-    const imgTree = new Image();
-    imgTree.src = '/arbol_plantado.png';
-    imgTree.onload = () => {
-      plantedTreeImageRef.current = imgTree;
+    const imgPlantedTree = new Image();
+    imgPlantedTree.src = `${import.meta.env.BASE_URL}arbol_plantado.png`;
+    imgPlantedTree.onload = () => {
+      plantedTreeImageRef.current = imgPlantedTree;
     };
 
     const imgGrownTree = new Image();
-    imgGrownTree.src = '/arbol.png';
+    imgGrownTree.src = `${import.meta.env.BASE_URL}arbol.png`;
     imgGrownTree.onload = () => {
       grownTreeImageRef.current = imgGrownTree;
     };
 
     const imgFort = new Image();
-    imgFort.src = '/fuerte.png';
+    imgFort.src = `${import.meta.env.BASE_URL}fuerte.png`;
     imgFort.onload = () => {
       fortImageRef.current = imgFort;
     };
 
     const imgBorderTree = new Image();
-    imgBorderTree.src = '/arbol_lindes.png';
+    imgBorderTree.src = `${import.meta.env.BASE_URL}arbol_lindes.png`;
     imgBorderTree.onload = () => {
       borderTreeImageRef.current = imgBorderTree;
     };
