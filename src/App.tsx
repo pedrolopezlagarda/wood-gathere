@@ -5,6 +5,12 @@ const WORLD_WIDTH = 2400;
 const WORLD_HEIGHT = 1800;
 const SPEED = 2.5;
 
+// Phase 1 circular arena config
+const PHASE1_CENTER_X = WORLD_WIDTH / 2;
+const PHASE1_CENTER_Y = WORLD_HEIGHT / 2;
+const PHASE1_PLAY_RADIUS = 320; // radio del área de juego jugable
+const PHASE1_BORDER_RADIUS = 370; // radio donde empiezan los árboles circulares
+
 interface Point {
   x: number;
   y: number;
@@ -139,8 +145,10 @@ export default function App() {
 
     console.log("Game initialized for phase", currentPhase);
     // Focus camera on the player's initial spawn base
-    cameraRef.current = { x: 150, y: 300, zoom: 1.5 };
-    targetCameraRef.current = { x: 150, y: 300, zoom: 1.5 };
+    const spawnX = currentPhase === 1 ? PHASE1_CENTER_X : 150;
+    const spawnY = currentPhase === 1 ? PHASE1_CENTER_Y : 300;
+    cameraRef.current = { x: spawnX, y: spawnY, zoom: 1.2 };
+    targetCameraRef.current = { x: spawnX, y: spawnY, zoom: 1.2 };
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -148,7 +156,9 @@ export default function App() {
 
     // Game state
     let nextBuildingId = 1;
-    const playerHouses: (Point & { id: number, hp: number, spawnTimer: number })[] = [{ id: 0, x: 150, y: 300, hp: 100, spawnTimer: 3600 }];
+    const houseX = currentPhase === 1 ? PHASE1_CENTER_X : 150;
+    const houseY = currentPhase === 1 ? PHASE1_CENTER_Y : 300;
+    const playerHouses: (Point & { id: number, hp: number, spawnTimer: number })[] = [{ id: 0, x: houseX, y: houseY, hp: 100, spawnTimer: 3600 }];
     const butcherShops: (Point & { id: number, hp: number })[] = [];
     const hunters: any[] = [];
     const playerForts: (Point & { id: number, hp: number })[] = [];
@@ -160,8 +170,8 @@ export default function App() {
       {
         id: 0,
         houseId: 0,
-        x: 150,
-        y: 300,
+        x: houseX,
+        y: houseY,
         state: 'IDLE',
         target: null as { x: number, y: number, tree?: Tree } | null,
         onReach: 'IDLE',
@@ -207,12 +217,19 @@ export default function App() {
       let attempts = 0;
       const allHouses = [...playerHouses, ...aiHouses, ...butcherShops, ...aiButcherShops, ...playerForts, ...aiForts];
       while (!valid && attempts < 200) {
-        if (owner === 'PLAYER') {
+        if (currentPhase === 1) {
+          // Phase 1: place trees inside the circular play zone
+          const angle = Math.random() * Math.PI * 2;
+          const r = 60 + Math.random() * (PHASE1_PLAY_RADIUS - 80);
+          x = PHASE1_CENTER_X + Math.cos(angle) * r;
+          y = PHASE1_CENTER_Y + Math.sin(angle) * r;
+        } else if (owner === 'PLAYER') {
           x = 200 + (Math.random() - 0.5) * 360; // Player side
+          y = 300 + (Math.random() - 0.5) * 560;
         } else {
           x = 600 + (Math.random() - 0.5) * 360; // AI side
+          y = 300 + (Math.random() - 0.5) * 560;
         }
-        y = 300 + (Math.random() - 0.5) * 560;
         
         // Clamp to canvas
         x = Math.max(20, Math.min(WORLD_WIDTH - 20, x));
@@ -244,14 +261,21 @@ export default function App() {
       let attempts = 0;
       const allBuildings = [...playerHouses, ...aiHouses, ...butcherShops, ...aiButcherShops, ...playerForts, ...aiForts];
       while (!valid && attempts < 200) {
-        if (owner === 'PLAYER') {
+        if (currentPhase === 1) {
+          // Phase 1: place inside the circular play zone
+          const angle = Math.random() * Math.PI * 2;
+          const r = 60 + Math.random() * (PHASE1_PLAY_RADIUS - 120);
+          x = PHASE1_CENTER_X + Math.cos(angle) * r;
+          y = PHASE1_CENTER_Y + Math.sin(angle) * r;
+        } else if (owner === 'PLAYER') {
           x = 150 + (Math.random() - 0.5) * 150;
           x = Math.max(20, Math.min(350, x));
+          y = 300 + (Math.random() - 0.5) * 300;
         } else {
           x = 650 + (Math.random() - 0.5) * 150;
           x = Math.max(450, Math.min(WORLD_WIDTH - 20, x));
+          y = 300 + (Math.random() - 0.5) * 300;
         }
-        y = 300 + (Math.random() - 0.5) * 300;
         y = Math.max(20, Math.min(WORLD_HEIGHT - 20, y));
 
         valid = true;
@@ -305,19 +329,54 @@ export default function App() {
         }
       }
     }
-    // Generate massive irregular border forest
-    const BORDER_MARGIN = 1500;
-    const FOREST_DENSITY = 8000;
-    for (let i = 0; i < FOREST_DENSITY; i++) {
+    if (currentPhase === 1) {
+      // Phase 1: circular border forest
+      // 1) Dense ring of trees exactly at/around the play radius
+      const RING_COUNT = 80;
+      for (let i = 0; i < RING_COUNT; i++) {
+        const angle = (i / RING_COUNT) * Math.PI * 2;
+        // Several concentric rings
+        for (let ring = 0; ring < 4; ring++) {
+          const r = PHASE1_BORDER_RADIUS + ring * 38 + (Math.random() - 0.5) * 20;
+          const rx = PHASE1_CENTER_X + Math.cos(angle + ring * 0.05) * r;
+          const ry = PHASE1_CENTER_Y + Math.sin(angle + ring * 0.05) * r;
+          trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
+        }
+      }
+      // 2) Fill the entire map exterior with dense trees
+      const EXTERIOR_DENSITY = 3000;
+      for (let i = 0; i < EXTERIOR_DENSITY; i++) {
+        const rx = Math.random() * WORLD_WIDTH;
+        const ry = Math.random() * WORLD_HEIGHT;
+        const distFromCenter = Math.hypot(rx - PHASE1_CENTER_X, ry - PHASE1_CENTER_Y);
+        // Only place trees outside the circular play zone
+        if (distFromCenter < PHASE1_BORDER_RADIUS - 10) continue;
+        trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
+      }
+      // 3) Also extend beyond world bounds like in other phases
+      const BORDER_MARGIN = 800;
+      const OUTER_DENSITY = 2000;
+      for (let i = 0; i < OUTER_DENSITY; i++) {
         let rx = -BORDER_MARGIN + Math.random() * (WORLD_WIDTH + BORDER_MARGIN * 2);
         let ry = -BORDER_MARGIN + Math.random() * (WORLD_HEIGHT + BORDER_MARGIN * 2);
-        
-        // Push trees outside the playable area if they fall inside
-        if (rx > -16 && rx < WORLD_WIDTH + 16 && ry > -16 && ry < WORLD_HEIGHT + 16) {
-            continue; 
-        }
-
+        if (rx > 0 && rx < WORLD_WIDTH && ry > 0 && ry < WORLD_HEIGHT) continue;
         trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
+      }
+    } else {
+      // Generate massive irregular border forest (other phases)
+      const BORDER_MARGIN = 1500;
+      const FOREST_DENSITY = 8000;
+      for (let i = 0; i < FOREST_DENSITY; i++) {
+          let rx = -BORDER_MARGIN + Math.random() * (WORLD_WIDTH + BORDER_MARGIN * 2);
+          let ry = -BORDER_MARGIN + Math.random() * (WORLD_HEIGHT + BORDER_MARGIN * 2);
+          
+          // Push trees outside the playable area if they fall inside
+          if (rx > -16 && rx < WORLD_WIDTH + 16 && ry > -16 && ry < WORLD_HEIGHT + 16) {
+              continue; 
+          }
+
+          trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
+      }
     }
 
     const getClosestTree = (point: Point, availableTrees: Tree[], owner: 'PLAYER' | 'AI', currentCharacterId: number) => {
@@ -2222,7 +2281,7 @@ export default function App() {
               <span className="text-[9px] text-amber-300">{25 * Math.pow(4, playerHouseCount - 1)} M</span>
             </button>
             <button 
-              onClick={() => wood >= 100 * Math.pow(2, butcherShopCount) && buildButcherShopRef.current++}
+              onClick={() => { buildButcherShopRef.current++; }}
               disabled={wood < 100 * Math.pow(2, butcherShopCount)}
               className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-800 hover:border-red-500 border border-stone-600 rounded relative"
             >
