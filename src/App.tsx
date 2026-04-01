@@ -1711,9 +1711,9 @@ export default function App() {
           const isBorder = t.owner === 'BORDER';
           const img = isBorder ? borderTreeImageRef.current : grownTreeImageRef.current;
           if (img && img.complete) {
-            const width = isBorder ? 48 : 32;
-            const height = isBorder ? 48 : 32;
-            ctx.drawImage(img, t.x - width / 2, t.y - height / (isBorder ? 1.5 : 2.5), width, height);
+            const width = 32;
+            const height = 32;
+            ctx.drawImage(img, t.x - width / 2, t.y - height / 2.5, width, height);
           } else {
             ctx.fillStyle = t.owner === 'PLAYER' ? '#2563eb' : '#16a34a'; // blue-600 : green-600
             ctx.fillText(isBorder ? 'B' : 'a', t.x, t.y);
@@ -2097,8 +2097,9 @@ export default function App() {
             targetCameraRef.current.y -= dy / targetCameraRef.current.zoom;
             
             // Constrain camera center to keep the forest as a visual edge
-            targetCameraRef.current.x = Math.max(-100, Math.min(WORLD_WIDTH + 100, targetCameraRef.current.x));
-            targetCameraRef.current.y = Math.max(-100, Math.min(WORLD_HEIGHT + 100, targetCameraRef.current.y));
+            const BORDER = 1200;
+            targetCameraRef.current.x = Math.max(-BORDER, Math.min(WORLD_WIDTH + BORDER, targetCameraRef.current.x));
+            targetCameraRef.current.y = Math.max(-BORDER, Math.min(WORLD_HEIGHT + BORDER, targetCameraRef.current.y));
 
             lastMousePosRef.current = { x: e.clientX, y: e.clientY };
           }}
@@ -2109,10 +2110,18 @@ export default function App() {
             if (!rect) return;
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
-            
+
             const oldZoom = targetCameraRef.current.zoom;
             const zoomAmount = e.deltaY * -0.0015;
-            const newZoom = Math.min(Math.max(0.4, oldZoom + zoomAmount), 3);
+
+            // Compute minimum zoom so the viewport never exceeds the tree-covered area
+            // Trees extend ~1200px beyond world boundary in each direction
+            const safeExtent = 1200;
+            const minZoomX = rect.width / (WORLD_WIDTH + safeExtent * 2);
+            const minZoomY = rect.height / (WORLD_HEIGHT + safeExtent * 2);
+            const minZoom = Math.max(minZoomX, minZoomY);
+
+            const newZoom = Math.min(Math.max(minZoom, oldZoom + zoomAmount), 3);
             
             const worldX = targetCameraRef.current.x + (mouseX - rect.width / 2) / oldZoom;
             const worldY = targetCameraRef.current.y + (mouseY - rect.height / 2) / oldZoom;
@@ -2121,8 +2130,9 @@ export default function App() {
             targetCameraRef.current.y = worldY - (mouseY - rect.height / 2) / newZoom;
             
             // Constrain camera center to keep the forest as a visual edge
-            targetCameraRef.current.x = Math.max(-100, Math.min(WORLD_WIDTH + 100, targetCameraRef.current.x));
-            targetCameraRef.current.y = Math.max(-100, Math.min(WORLD_HEIGHT + 100, targetCameraRef.current.y));
+            const BORDER = 1200;
+            targetCameraRef.current.x = Math.max(-BORDER, Math.min(WORLD_WIDTH + BORDER, targetCameraRef.current.x));
+            targetCameraRef.current.y = Math.max(-BORDER, Math.min(WORLD_HEIGHT + BORDER, targetCameraRef.current.y));
             
             targetCameraRef.current.zoom = newZoom;
           }}
