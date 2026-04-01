@@ -53,6 +53,11 @@ export default function App() {
 
   const workersRef = useRef<WorkerConfig[]>(workers);
   const restThresholdRef = useRef(restThreshold);
+  const gameOverRef = useRef<string | null>(null);
+  const currentWoodRef = useRef(0);
+  const currentAiWoodRef = useRef(0);
+  const currentMeatRef = useRef(0);
+  const currentAiMeatRef = useRef(0);
   const buildHouseRef = useRef(0);
   const buildButcherShopRef = useRef(0);
   const buildFortRef = useRef(0);
@@ -61,7 +66,7 @@ export default function App() {
   const plantedTreeImageRef = useRef<HTMLImageElement | null>(null);
   const grownTreeImageRef = useRef<HTMLImageElement | null>(null);
   const fortImageRef = useRef<HTMLImageElement | null>(null);
-  const gameOverRef = useRef<string | null>(null);
+  const borderTreeImageRef = useRef<HTMLImageElement | null>(null);
   const currentPhaseRef = useRef(currentPhase);
 
   useEffect(() => {
@@ -101,6 +106,12 @@ export default function App() {
     imgFort.onload = () => {
       fortImageRef.current = imgFort;
     };
+
+    const imgBorderTree = new Image();
+    imgBorderTree.src = '/arbol_lindes.png';
+    imgBorderTree.onload = () => {
+      borderTreeImageRef.current = imgBorderTree;
+    };
   }, []);
 
   useEffect(() => {
@@ -120,10 +131,11 @@ export default function App() {
     setAiHouseCount(currentPhase <= 3 ? 0 : 1); setAiButcherShopCount(0); setAiFortCount(0); setAiSoldierCount(0);
     setGameOver(null);
     gameOverRef.current = null;
-    buildHouseRef.current = 0;
-    buildButcherShopRef.current = 0;
-    buildFortRef.current = 0;
-    buildSoldierRef.current = 0;
+    currentWoodRef.current = 0;
+    currentAiWoodRef.current = 0;
+    currentMeatRef.current = 0;
+    currentAiMeatRef.current = 0;
+    let animationId: any;
 
     console.log("Game initialized for phase", currentPhase);
     // Focus camera on the player's initial spawn base
@@ -332,72 +344,13 @@ export default function App() {
       return closest;
     };
 
-    let animationId: number;
-    let currentWood = 0;
-    let currentAiWood = 0;
-    let currentMeat = 0;
-    let currentAiMeat = 0;
-
     let aiSoldierTimer = 0;
     let aiHouseTimer = 0;
     let aiButcherTimer = 0;
     let aiFortTimer = 0;
 
 
-    const drawMinimap = () => {
-      const miniCanvas = minimapRef.current;
-      const mainCanvas = canvasRef.current;
-      if (!miniCanvas || !mainCanvas) return;
-      const mCtx = miniCanvas.getContext('2d');
-      if (!mCtx) return;
 
-      // Clear Minimap Background
-      mCtx.fillStyle = '#fef9c3'; 
-      mCtx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
-
-      const scaleX = miniCanvas.width / WORLD_WIDTH;
-      const scaleY = miniCanvas.height / WORLD_HEIGHT;
-
-      // Draw Trees
-      mCtx.fillStyle = '#16a34a';
-      trees.forEach(t => {
-        if (t.state === 'GROWN' && t.owner !== 'BORDER') mCtx.fillRect(t.x * scaleX, t.y * scaleY, 2, 2);
-      });
-
-      // Draw Houses (Blue player, Red AI)
-      mCtx.fillStyle = '#3b82f6';
-      playerHouses.forEach(h => mCtx.fillRect(h.x * scaleX - 1, h.y * scaleY - 1, 4, 4));
-      
-      mCtx.fillStyle = '#ef4444';
-      aiHouses.forEach(h => mCtx.fillRect(h.x * scaleX - 1, h.y * scaleY - 1, 4, 4));
-
-      // Draw Entities (Black player, Dark Red AI)
-      mCtx.fillStyle = '#000000';
-      playerCharacters.forEach(p => mCtx.fillRect(p.x * scaleX, p.y * scaleY, 2, 2));
-      hunters.forEach(h => mCtx.fillRect(h.x * scaleX, h.y * scaleY, 2, 2));
-      playerSoldiers.forEach(s => mCtx.fillRect(s.x * scaleX, s.y * scaleY, 2, 2));
-
-      mCtx.fillStyle = '#991b1b';
-      aiCharacters.forEach(p => mCtx.fillRect(p.x * scaleX, p.y * scaleY, 2, 2));
-      aiHunters.forEach(h => mCtx.fillRect(h.x * scaleX, h.y * scaleY, 2, 2));
-      aiSoldiers.forEach(s => mCtx.fillRect(s.x * scaleX, s.y * scaleY, 2, 2));
-
-      // Draw Camera Viewport
-      mCtx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
-      mCtx.lineWidth = 1;
-      const viewW = mainCanvas.width / cameraRef.current.zoom;
-      const viewH = mainCanvas.height / cameraRef.current.zoom;
-      const viewX = cameraRef.current.x;
-      const viewY = cameraRef.current.y;
-      mCtx.strokeRect(viewX * scaleX, viewY * scaleY, viewW * scaleX, viewH * scaleY);
-      
-      // Fill the area outside viewport with semi-transparent black
-      mCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-      mCtx.beginPath();
-      mCtx.rect(0, 0, miniCanvas.width, miniCanvas.height);
-      mCtx.rect(viewX * scaleX, viewY * scaleY, viewW * scaleX, viewH * scaleY);
-      mCtx.fill('evenodd');
-    };
 
     const loop = () => {
       if (gameOverRef.current) return;
@@ -410,7 +363,6 @@ export default function App() {
       update();
       draw(ctx);
       if (ctx.restore) ctx.restore(); // Restore camera transform applied in draw()
-      drawMinimap();
       animationId = requestAnimationFrame(loop);
     };
 
@@ -419,11 +371,11 @@ export default function App() {
       while (buildHouseRef.current > 0) {
         buildHouseRef.current--;
         const currentCost = 25 * Math.pow(4, playerHouses.length - 1);
-        if (currentWood >= currentCost) {
+        if (currentWoodRef.current >= currentCost) {
           const pos = getValidBuildingPosition('PLAYER');
           if (pos) {
-            currentWood -= currentCost;
-            setWood(currentWood);
+            currentWoodRef.current -= currentCost;
+            setWood(currentWoodRef.current);
             const houseId = nextBuildingId++;
             playerHouses.push({ id: houseId, x: pos.x, y: pos.y, hp: 100, spawnTimer: 3600 });
             setPlayerHouseCount(playerHouses.length);
@@ -513,11 +465,11 @@ export default function App() {
       while (buildButcherShopRef.current > 0) {
         buildButcherShopRef.current--;
         const currentCost = 100 * Math.pow(2, butcherShops.length);
-        if (currentWood >= currentCost) {
+        if (currentWoodRef.current >= currentCost) {
           const pos = getValidBuildingPosition('PLAYER');
           if (pos) {
-            currentWood -= currentCost;
-            setWood(currentWood);
+            currentWoodRef.current -= currentCost;
+            setWood(currentWoodRef.current);
             const shopId = nextBuildingId++;
             butcherShops.push({ id: shopId, x: pos.x, y: pos.y, hp: 100 });
             setButcherShopCount(butcherShops.length);
@@ -546,13 +498,13 @@ export default function App() {
       while (buildFortRef.current > 0) {
         buildFortRef.current--;
         const fortCost = 50 * Math.pow(2, playerForts.length);
-        if (currentWood >= fortCost && currentMeat >= fortCost) {
+        if (currentWoodRef.current >= fortCost && currentMeatRef.current >= fortCost) {
           const pos = getValidBuildingPosition('PLAYER');
           if (pos) {
-            currentWood -= fortCost;
-            currentMeat -= fortCost;
-            setWood(currentWood);
-            setMeat(currentMeat);
+            currentWoodRef.current -= fortCost;
+            currentMeatRef.current -= fortCost;
+            setWood(currentWoodRef.current);
+            setMeat(currentMeatRef.current);
             playerForts.push({ id: nextBuildingId++, x: pos.x, y: pos.y, hp: 100 });
             setFortCount(playerForts.length);
           }
@@ -562,9 +514,9 @@ export default function App() {
       // Check pending soldiers
       while (buildSoldierRef.current > 0) {
         buildSoldierRef.current--;
-        if (currentMeat >= 50 && playerForts.length > 0) {
-          currentMeat -= 50;
-          setMeat(currentMeat);
+        if (currentMeatRef.current >= 50 && playerForts.length > 0) {
+          currentMeatRef.current -= 50;
+          setMeat(currentMeatRef.current);
           const newId = nextCharId++;
           playerSoldiers.push({
             id: newId,
@@ -888,7 +840,7 @@ export default function App() {
           gameOverRef.current = "¡Has perdido! El enemigo ha destruido todos tus edificios.";
           setGameOver(gameOverRef.current);
         } else if (currentPhase === 1) {
-          if (currentWood >= 50) {
+          if (currentWoodRef.current >= 50) {
             gameOverRef.current = "VICTORY_PHASE_1";
             setGameOver(gameOverRef.current);
           }
@@ -898,7 +850,7 @@ export default function App() {
             setGameOver(gameOverRef.current);
           }
         } else if (currentPhase === 3) {
-          if (butcherShops.length >= 1 && currentMeat > 0) {
+          if (butcherShops.length >= 1 && currentMeatRef.current > 0) {
             gameOverRef.current = "VICTORY_PHASE_3";
             setGameOver(gameOverRef.current);
           }
@@ -1042,9 +994,10 @@ export default function App() {
           p.timer--;
           if (p.timer <= 0) {
             p.carrying = null;
-            currentWood += 2;
-            setWood(currentWood);
+            currentWoodRef.current += 2;
+            setWood(currentWoodRef.current);
             p.state = 'IDLE';
+            p.timer = 0;
           }
         } else if (p.state === 'GETTING_SEED') {
           p.timer--;
@@ -1230,9 +1183,10 @@ export default function App() {
           h.timer--;
           if (h.timer <= 0) {
             h.carrying = null;
-            currentMeat += 4;
-            setMeat(currentMeat);
+            currentMeatRef.current += 4;
+            setMeat(currentMeatRef.current);
             h.state = 'IDLE';
+            h.timer = 0;
           }
         }
       }
@@ -1353,9 +1307,10 @@ export default function App() {
           h.timer--;
           if (h.timer <= 0) {
             h.carrying = null;
-            currentAiMeat += 4;
-            setAiMeat(currentAiMeat);
+            currentAiMeatRef.current += 4;
+            setAiMeat(currentAiMeatRef.current);
             h.state = 'IDLE';
+            h.timer = 0;
           }
         }
       }
@@ -1365,11 +1320,11 @@ export default function App() {
       // AI House Building
       if (aiHouseTimer > 0) aiHouseTimer--;
       const aiHouseCost = 25 * Math.pow(4, aiHouses.length - 1);
-      if (aiHouseTimer <= 0 && currentAiWood >= aiHouseCost && aiHouses.length < 5) {
+      if (aiHouseTimer <= 0 && currentAiWoodRef.current >= aiHouseCost && aiHouses.length < 5) {
         const pos = getValidBuildingPosition('AI');
         if (pos) {
-          currentAiWood -= aiHouseCost;
-          setAiWood(currentAiWood);
+          currentAiWoodRef.current -= aiHouseCost;
+          setAiWood(currentAiWoodRef.current);
           const houseId = nextBuildingId++;
           aiHouses.push({ id: houseId, x: pos.x, y: pos.y, hp: 100, spawnTimer: 3600 });
           setAiHouseCount(aiHouses.length);
@@ -1396,11 +1351,11 @@ export default function App() {
       // AI Butcher Shops
       if (aiButcherTimer > 0) aiButcherTimer--;
       const butcherShopCost = 100 * Math.pow(2, aiButcherShops.length);
-      if (aiButcherTimer <= 0 && currentAiWood >= butcherShopCost && aiHouses.length > 1 && aiButcherShops.length < 2) {
+      if (aiButcherTimer <= 0 && currentAiWoodRef.current >= butcherShopCost && aiHouses.length > 1 && aiButcherShops.length < 2) {
         const pos = getValidBuildingPosition('AI');
         if (pos) {
-          currentAiWood -= butcherShopCost;
-          setAiWood(currentAiWood);
+          currentAiWoodRef.current -= butcherShopCost;
+          setAiWood(currentAiWoodRef.current);
           const shopId = nextBuildingId++;
           aiButcherShops.push({ id: shopId, x: pos.x, y: pos.y, hp: 100 });
           setAiButcherShopCount(aiButcherShops.length);
@@ -1426,13 +1381,13 @@ export default function App() {
       // AI Forts
       if (aiFortTimer > 0) aiFortTimer--;
       const aiFortCost = 50 * Math.pow(2, aiForts.length); // Wood + Meat
-      if (aiFortTimer <= 0 && aiButcherShops.length > 0 && currentAiWood >= aiFortCost && currentAiMeat >= aiFortCost && aiForts.length < 2) {
+      if (aiFortTimer <= 0 && aiButcherShops.length > 0 && currentAiWoodRef.current >= aiFortCost && currentAiMeatRef.current >= aiFortCost && aiForts.length < 2) {
         const pos = getValidBuildingPosition('AI');
         if (pos) {
-          currentAiWood -= aiFortCost;
-          currentAiMeat -= aiFortCost;
-          setAiWood(currentAiWood);
-          setAiMeat(currentAiMeat);
+          currentAiWoodRef.current -= aiFortCost;
+          currentAiMeatRef.current -= aiFortCost;
+          setAiWood(currentAiWoodRef.current);
+          setAiMeat(currentAiMeatRef.current);
           aiForts.push({ id: nextBuildingId++, x: pos.x, y: pos.y, hp: 100 });
           setAiFortCount(aiForts.length);
           aiFortTimer = 1800; // 30 seconds cooldown
@@ -1441,9 +1396,9 @@ export default function App() {
 
         // AI Soldiers
         if (aiSoldierTimer > 0) aiSoldierTimer--;
-        if (aiSoldierTimer <= 0 && aiForts.length > 0 && currentAiMeat >= 50 && aiSoldiers.length < 10) {
-          currentAiMeat -= 50;
-          setAiMeat(currentAiMeat);
+        if (aiSoldierTimer <= 0 && aiForts.length > 0 && currentAiMeatRef.current >= 50 && aiSoldiers.length < 10) {
+          currentAiMeatRef.current -= 50;
+          setAiMeat(currentAiMeatRef.current);
           aiSoldiers.push({ 
             id: nextCharId++,
             x: aiForts[0].x, 
@@ -1576,8 +1531,8 @@ export default function App() {
           aiPerson.timer--;
           if (aiPerson.timer <= 0) {
             aiPerson.carrying = null;
-            currentAiWood += 2;
-            setAiWood(currentAiWood);
+            currentAiWoodRef.current += 2;
+            setAiWood(currentAiWoodRef.current);
             aiPerson.state = 'IDLE';
           }
         } else if (aiPerson.state === 'GETTING_SEED') {
@@ -1694,13 +1649,15 @@ export default function App() {
       
       [...visibleTrees].sort((a, b) => a.y - b.y).forEach((t) => {
         if (t.state === 'GROWN' && (t.wood > 0 || t.owner === 'BORDER')) {
-          if (grownTreeImageRef.current && grownTreeImageRef.current.complete) {
-            const width = 32;
-            const height = 32;
-            ctx.drawImage(grownTreeImageRef.current, t.x - width / 2, t.y - height / 2.5, width, height);
+          const isBorder = t.owner === 'BORDER';
+          const img = isBorder ? borderTreeImageRef.current : grownTreeImageRef.current;
+          if (img && img.complete) {
+            const width = isBorder ? 48 : 32;
+            const height = isBorder ? 48 : 32;
+            ctx.drawImage(img, t.x - width / 2, t.y - height / (isBorder ? 1.5 : 2.5), width, height);
           } else {
             ctx.fillStyle = t.owner === 'PLAYER' ? '#2563eb' : '#16a34a'; // blue-600 : green-600
-            ctx.fillText('a', t.x, t.y);
+            ctx.fillText(isBorder ? 'B' : 'a', t.x, t.y);
           }
         } else if (t.state === 'PLANTED') {
           if (plantedTreeImageRef.current && plantedTreeImageRef.current.complete) {
@@ -2202,10 +2159,6 @@ export default function App() {
                 <span>Fuertes: {aiFortCount}</span>
                 <span>Soldados: {aiSoldierCount}</span>
               </div>
-            </div>
-            {/* Minimap */}
-            <div className="mt-2 bg-stone-900 border border-stone-600 rounded overflow-hidden relative shrink-0 aspect-[4/3] w-full mx-auto">
-              <canvas ref={minimapRef} className="w-full h-full block" width={400} height={300} />
             </div>
           </div>
         </div>
