@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // Game constants
 const WORLD_WIDTH = 2400;
 const WORLD_HEIGHT = 1800;
-const SPEED = 1;
+const SPEED = 2.5;
 
 interface Point {
   x: number;
