@@ -25,7 +25,7 @@ interface Tree extends Point {
 }
 
 type GameMode = 'GATHER' | 'PLANT' | 'IDLE' | 'HUNT' | 'ATTACK_WORKERS' | 'ATTACK_BUILDINGS' | 'ATTACK_SOLDIERS';
-type ViewState = 'MAP' | 'PLAYING';
+type ViewState = 'TITLE' | 'MAP' | 'PLAYING';
 
 const NAMES = ['Juan', 'Antonio', 'Carlos', 'David', 'Elena', 'Paco', 'Lucia', 'Maria', 'Pepe', 'Luis', 'Marcos', 'Sofia', 'Hugo', 'Lola', 'Rafa'];
 type WorkerConfig = { id: number, name: string, mode: GameMode, role: 'WOOD' | 'MEAT' | 'SOLDIER' };
@@ -91,6 +91,16 @@ const PHASE_TUTORIAL: Record<number, { title: string; steps: string[]; goal: str
     ],
     goal: '🎯 Compra 3 Cartas de Mejora en el Comercio',
   },
+  5: {
+    title: '🏰 El Fuerte',
+    steps: [
+      'El Fuerte (F) es la base de tus operaciones militares.',
+      'Requiere Madera y Carne para su construcción.',
+      'Desde el Fuerte puedes reclutar Soldados para defender tu aldea o atacar al enemigo.',
+      '¡Atención! A partir de ahora, otras aldeas podrían expandirse por el mapa.',
+    ],
+    goal: '🎯 Construye un Fuerte y recluta a tu primer Soldado',
+  },
 };
 
 export default function App() {
@@ -101,7 +111,7 @@ export default function App() {
   const targetCameraRef = useRef({ x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 });
   const isDraggingRef = useRef(false);
   const lastMousePosRef = useRef({ x: 0, y: 0 });
-  const [gameState, setGameState] = useState<ViewState>('MAP');
+  const [gameState, setGameState] = useState<ViewState>('TITLE');
   const [currentPhase, setCurrentPhase] = useState(1);
   const [maxUnlockedPhase, setMaxUnlockedPhase] = useState(4);
   const [wood, setWood] = useState(0);
@@ -1071,7 +1081,12 @@ export default function App() {
             gameOverRef.current = "VICTORY_PHASE_4";
             setGameOver(gameOverRef.current);
           }
-        } else if (currentPhase > 4) {
+        } else if (currentPhase === 5) {
+          if (playerForts.length >= 1 && playerSoldiers.length >= 1) {
+            gameOverRef.current = "VICTORY_PHASE_5";
+            setGameOver(gameOverRef.current);
+          }
+        } else if (currentPhase > 5) {
           if (aiHouses.length === 0 && aiButcherShops.length === 0 && aiForts.length === 0) {
             gameOverRef.current = "¡Has ganado! Has destruido todos los edificios enemigos.";
             setGameOver(gameOverRef.current);
@@ -2216,10 +2231,64 @@ export default function App() {
     return () => cancelAnimationFrame(animationId);
   }, [gameState, currentPhase]);
 
+  if (gameState === 'TITLE') {
+    return (
+      <div 
+        className="bg-stone-900 flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden"
+        style={{ minHeight: '100dvh', width: '100vw', margin: 0, padding: 0 }}
+      >
+        {/* Animated Forest Background Placeholder */}
+        <div className="absolute inset-0 opacity-20 pointer-events-none">
+           <div className="absolute top-10 left-10 text-8xl">🌲</div>
+           <div className="absolute bottom-20 right-20 text-9xl">🌳</div>
+           <div className="absolute top-1/2 left-1/4 text-7xl">🌲</div>
+           <div className="absolute bottom-1/4 right-1/3 text-8xl">🌳</div>
+        </div>
+
+        <div className="z-10 flex flex-col items-center">
+          <div className="mb-2 flex items-center gap-4">
+             <span className="text-6xl animate-bounce">🪓</span>
+             <h1 className="text-8xl font-black text-white drop-shadow-[0_5px_0_theme(colors.amber.700)] italic tracking-tighter">WOOD</h1>
+          </div>
+          <h1 className="text-8xl font-black text-amber-500 mb-16 drop-shadow-[0_5px_0_theme(colors.amber.800)] italic tracking-tighter">GATHERER</h1>
+          
+          <div className="flex flex-col gap-6 w-full max-w-sm">
+            <button 
+              onClick={() => setGameState('MAP')}
+              className="group relative px-8 py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl border-b-8 border-emerald-800 active:border-b-0 active:translate-y-2 transition-all flex flex-col items-center"
+            >
+              <span className="text-3xl font-black italic tracking-widest uppercase mb-1">Campaña</span>
+              <span className="text-emerald-200 text-xs font-bold font-mono tracking-widest">Single Player Quest</span>
+            </button>
+
+            <button 
+              className="group relative px-8 py-6 bg-stone-700 opacity-60 cursor-not-allowed text-stone-400 rounded-2xl border-b-8 border-stone-900 flex flex-col items-center"
+            >
+              <span className="text-3xl font-black italic tracking-widest uppercase mb-1">Multijugador</span>
+              <span className="text-stone-500 text-xs font-bold font-mono tracking-widest uppercase">Próximamente...</span>
+            </button>
+            
+            <p className="text-stone-500 text-[10px] uppercase font-bold tracking-[0.2em] mt-8">v1.2.5 - Pedro Lopez Lagarda</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (gameState === 'MAP') {
     return (
-      <div className="min-h-screen bg-emerald-900 flex flex-col items-center justify-center p-4 font-sans pattern-isometric">
-        <h1 className="text-5xl font-black text-white mb-12 drop-shadow-lg italic tracking-tight">MAPA DE MUNDO</h1>
+      <div 
+        className="bg-emerald-900 flex flex-col items-center justify-center p-4 font-sans pattern-isometric relative"
+        style={{ minHeight: '100dvh', width: '100vw', margin: 0, padding: 0 }}
+      >
+        <button 
+          onClick={() => setGameState('TITLE')}
+          className="absolute top-8 left-8 px-6 py-3 bg-stone-800/80 hover:bg-stone-700 text-stone-200 font-black rounded-xl border-2 border-stone-600/50 backdrop-blur-sm transition-all"
+        >
+          ← Volver al Menú
+        </button>
+
+        <h1 className="text-5xl font-black text-white mb-12 drop-shadow-lg italic tracking-tight uppercase">MAPA DE MUNDO</h1>
         
         <div className="flex gap-8 items-center bg-emerald-800/80 p-12 rounded-3xl shadow-2xl backdrop-blur-md border border-emerald-700/50">
           {/* Phase 1 */}
@@ -2272,7 +2341,21 @@ export default function App() {
             >
               4
             </button>
-            <span className="text-emerald-100 font-bold tracking-wide">{maxUnlockedPhase >= 4 ? 'El Comercio' : 'Próximamente'}</span>
+            <span className="text-emerald-100 font-bold tracking-wide">El Comercio</span>
+          </div>
+
+          <div className="w-16 h-4 border-y-4 border-dashed border-emerald-700"></div>
+
+          {/* Phase 5 */}
+          <div className={`flex flex-col items-center gap-3 ${maxUnlockedPhase < 5 ? 'opacity-50' : ''}`}>
+            <button 
+              disabled={maxUnlockedPhase < 5}
+              onClick={() => { setCurrentPhase(5); setGameState('PLAYING'); }}
+              className={`w-24 h-24 rounded-full border-4 flex items-center justify-center text-3xl font-black transition-all ${maxUnlockedPhase >= 5 ? 'cursor-pointer bg-indigo-400 border-indigo-200 text-indigo-100 shadow-[0_10px_0_theme(colors.indigo.600)] hover:translate-y-2 hover:shadow-[0_2px_0_theme(colors.indigo.600)]' : 'cursor-not-allowed bg-slate-400 border-slate-300 text-slate-800 shadow-[0_10px_0_theme(colors.slate.600)]'}`}
+            >
+              5
+            </button>
+            <span className="text-emerald-100 font-bold tracking-wide">{maxUnlockedPhase >= 5 ? 'El Fuerte' : 'Próximamente'}</span>
           </div>
         </div>
       </div>
@@ -2280,14 +2363,17 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-screen bg-stone-900 flex flex-col overflow-hidden font-sans">
+    <div 
+      className="bg-stone-900 flex flex-col overflow-hidden font-sans relative"
+      style={{ height: '100dvh', width: '100vw', margin: 0, padding: 0 }}
+    >
       
       {/* Top Game View */}
       <div className="flex-1 relative flex overflow-hidden bg-[#fef9c3] min-h-0">
         <canvas
           ref={canvasRef}
-          width={WORLD_WIDTH}
-          height={WORLD_HEIGHT}
+          width={1}
+          height={1}
           onMouseDown={(e) => {
             isDraggingRef.current = true;
             lastMousePosRef.current = { x: e.clientX, y: e.clientY };
@@ -2530,8 +2616,26 @@ export default function App() {
               {activeCards.map(c => <span key={c.id} className="text-4xl">{c.icon}</span>)}
             </div>
             <button 
-              onClick={() => { setGameState('MAP'); }}
+              onClick={() => {
+                setMaxUnlockedPhase(Math.max(maxUnlockedPhase, 5));
+                setGameState('MAP');
+              }}
               className="px-12 py-5 bg-white text-yellow-700 font-black text-xl uppercase italic rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.8)]"
+            >
+              Siguiente Fase →
+            </button>
+          </div>
+        )}
+        {gameOver === "VICTORY_PHASE_5" && (
+          <div className="absolute inset-0 bg-indigo-600/80 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50">
+            <h2 className="text-7xl font-black mb-4 tracking-tighter uppercase italic drop-shadow-xl text-indigo-100">¡Fortaleza Erigida!</h2>
+            <p className="text-2xl font-bold mb-12 max-w-md drop-shadow-md">Has establecido un fuerte y entrenado a tu primer soldado. El enemigo ahora sabe que no estamos solos.</p>
+            <button 
+              onClick={() => {
+                setMaxUnlockedPhase(Math.max(maxUnlockedPhase, 6)); // Unlock Phase 6 if exists
+                setGameState('MAP');
+              }}
+              className="px-12 py-5 bg-white text-indigo-700 font-black text-xl uppercase italic rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.8)]"
             >
               Volver al Mapa
             </button>
@@ -2557,7 +2661,7 @@ export default function App() {
         {/* Left Column: Resources & Info */}
         <div className="w-1/4 p-4 border-r-2 border-stone-700 flex flex-col overflow-y-auto">
           <h2 className="text-xl font-black text-amber-500 mb-2 tracking-wider">
-            {currentPhase === 1 ? 'FASE 1: LA TALA' : currentPhase === 2 ? 'FASE 2: LA ALDEA' : currentPhase === 3 ? 'FASE 3: LA CAZA' : 'FASE 4: EL COMERCIO'}
+            {currentPhase === 1 ? 'FASE 1: LA TALA' : currentPhase === 2 ? 'FASE 2: LA ALDEA' : currentPhase === 3 ? 'FASE 3: LA CAZA' : currentPhase === 4 ? 'FASE 4: EL COMERCIO' : 'FASE 5: EL FUERTE'}
           </h2>
           
           <div className="flex flex-col gap-2">
@@ -2617,35 +2721,35 @@ export default function App() {
               return (
                 <div key={role} className="flex flex-col gap-1.5">
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-black border ${badgeColor}`}>
+                    <span className={`px-2 py-0.5 rounded text-[11px] uppercase font-black border ${badgeColor}`}>
                       {roleName} ({groupWorkers.length})
                     </span>
                     <div className="h-px bg-stone-700 flex-1"></div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {groupWorkers.map(worker => (
-                      <div key={worker.id} className="flex flex-col bg-stone-900 p-1.5 rounded border border-stone-700 min-w-[110px] shadow-sm">
+                      <div key={worker.id} className="flex flex-col bg-stone-900 p-1.5 rounded border border-stone-700 min-w-[125px] shadow-sm">
                         <div className="flex justify-between items-center mb-1.5">
-                          <span className="font-bold text-[11px] text-stone-200 truncate max-w-[80px]">{worker.name}</span>
+                          <span className="font-bold text-[13px] text-stone-200 truncate max-w-[90px]">{worker.name}</span>
                         </div>
                         <div className="flex gap-1 justify-start">
                           {worker.role === 'WOOD' && (
                             <>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'GATHER' } : w))} className={`px-2 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'GATHER' ? 'bg-amber-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Talar</button>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'PLANT' } : w))} className={`px-2 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'PLANT' ? 'bg-emerald-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Plantar</button>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'GATHER' } : w))} className={`px-2 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'GATHER' ? 'bg-amber-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Talar</button>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'PLANT' } : w))} className={`px-2 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'PLANT' ? 'bg-emerald-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Plantar</button>
                             </>
                           )}
                           {worker.role === 'MEAT' && (
-                            <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'HUNT' } : w))} className={`px-3 py-0.5 text-[9px] rounded transition-colors flex-1 ${worker.mode === 'HUNT' ? 'bg-red-700 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Cazar</button>
+                            <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'HUNT' } : w))} className={`px-3 py-0.5 text-[11px] rounded transition-colors flex-1 ${worker.mode === 'HUNT' ? 'bg-red-700 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Cazar</button>
                           )}
                           {worker.role === 'SOLDIER' && (
                             <>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_SOLDIERS' } : w))} title="Atacar Soldados" className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'ATTACK_SOLDIERS' ? 'bg-blue-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>S</button>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_WORKERS' } : w))} title="Atacar Trabajadores" className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'ATTACK_WORKERS' ? 'bg-red-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>T</button>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_BUILDINGS' } : w))} title="Atacar Edificios" className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'ATTACK_BUILDINGS' ? 'bg-orange-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>E</button>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_SOLDIERS' } : w))} title="Atacar Soldados" className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'ATTACK_SOLDIERS' ? 'bg-blue-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>S</button>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_WORKERS' } : w))} title="Atacar Trabajadores" className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'ATTACK_WORKERS' ? 'bg-red-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>T</button>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_BUILDINGS' } : w))} title="Atacar Edificios" className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'ATTACK_BUILDINGS' ? 'bg-orange-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>E</button>
                             </>
                           )}
-                          <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'IDLE' } : w))} className={`px-1.5 py-0.5 text-[9px] rounded ml-auto transition-colors ${worker.mode === 'IDLE' ? 'bg-stone-200 text-stone-900 font-bold' : 'bg-stone-800 border border-stone-600 hover:bg-stone-700'}`}>Zz</button>
+                          <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'IDLE' } : w))} className={`px-1.5 py-0.5 text-[11px] rounded ml-auto transition-colors ${worker.mode === 'IDLE' ? 'bg-stone-200 text-stone-900 font-bold' : 'bg-stone-800 border border-stone-600 hover:bg-stone-700'}`}>Zz</button>
                         </div>
                       </div>
                     ))}
@@ -2709,7 +2813,7 @@ export default function App() {
               <span className="font-bold text-xs">Soldado</span>
               <span className="text-[9px] text-red-300">{activeCards.some(c=>c.id==='mercenary')?25:50} C</span>
             </button>
-            {currentPhase === 4 && (
+            {currentPhase >= 4 && (
               <button
                 onClick={() => wood >= 150 && meat >= 50 && buildMarketRef.current++}
                 disabled={wood < 150 || meat < 50}
@@ -2722,7 +2826,7 @@ export default function App() {
                 </div>
               </button>
             )}
-            {currentPhase === 4 && marketCount > 0 && (
+            {currentPhase >= 4 && marketCount > 0 && (
               <button
                 onClick={() => setMarketOpen(true)}
                 className="flex flex-col items-center justify-center p-1 bg-yellow-800 hover:bg-yellow-700 border border-yellow-600 rounded relative col-span-2 animate-pulse"
