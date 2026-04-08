@@ -61,7 +61,7 @@ const PHASE_TUTORIAL: Record<number, { title: string; steps: string[]; goal: str
       'En el panel inferior puedes cambiarle entre modo «Talar» y «Plantar».',
       'Planta árboles para no quedarte sin madera.',
     ],
-    goal: '🎯 Acumula 50 de madera para superar la fase',
+    goal: '🎯 Acumula 25 de madera para superar la fase',
   },
   2: {
     title: '🏠 La Aldea',
@@ -113,7 +113,7 @@ export default function App() {
   const lastMousePosRef = useRef({ x: 0, y: 0 });
   const [gameState, setGameState] = useState<ViewState>('TITLE');
   const [currentPhase, setCurrentPhase] = useState(1);
-  const [maxUnlockedPhase, setMaxUnlockedPhase] = useState(4);
+  const [maxUnlockedPhase, setMaxUnlockedPhase] = useState(1);
   const [wood, setWood] = useState(0);
   const [aiWood, setAiWood] = useState(0);
   const [meat, setMeat] = useState(0);
@@ -1062,7 +1062,7 @@ export default function App() {
           gameOverRef.current = "¡Has perdido! El enemigo ha destruido todos tus edificios.";
           setGameOver(gameOverRef.current);
         } else if (currentPhase === 1) {
-          if (currentWoodRef.current >= 50) {
+          if (currentWoodRef.current >= 25) {
             gameOverRef.current = "VICTORY_PHASE_1";
             setGameOver(gameOverRef.current);
           }
@@ -2238,37 +2238,41 @@ export default function App() {
         style={{ minHeight: '100dvh', width: '100vw', margin: 0, padding: 0 }}
       >
         {/* Animated Forest Background Placeholder */}
-        <div className="absolute inset-0 opacity-20 pointer-events-none">
-           <div className="absolute top-10 left-10 text-8xl">🌲</div>
-           <div className="absolute bottom-20 right-20 text-9xl">🌳</div>
-           <div className="absolute top-1/2 left-1/4 text-7xl">🌲</div>
-           <div className="absolute bottom-1/4 right-1/3 text-8xl">🌳</div>
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
+           <div className="absolute top-10 left-10 text-6xl">🌲</div>
+           <div className="absolute bottom-20 right-20 text-7xl">🌳</div>
+           <div className="absolute top-1/2 left-1/4 text-5xl">🌲</div>
+           <div className="absolute bottom-1/4 right-1/3 text-6xl">🌳</div>
         </div>
 
-        <div className="z-10 flex flex-col items-center">
-          <div className="mb-2 flex items-center gap-4">
-             <span className="text-6xl animate-bounce">🪓</span>
-             <h1 className="text-8xl font-black text-white drop-shadow-[0_5px_0_theme(colors.amber.700)] italic tracking-tighter">WOOD</h1>
+        <div className="z-10 flex flex-col items-center max-w-lg w-full">
+          <div className="flex flex-col items-center mb-12">
+            <div className="flex items-center gap-3 mb-1">
+               <span className="text-4xl">🪓</span>
+               <h1 className="text-6xl font-black text-white drop-shadow-[0_4px_0_theme(colors.amber.700)] italic tracking-tighter uppercase">WOOD</h1>
+            </div>
+            <h1 className="text-6xl font-black text-amber-500 drop-shadow-[0_4px_0_theme(colors.amber.800)] italic tracking-tighter uppercase">GATHERER</h1>
           </div>
-          <h1 className="text-8xl font-black text-amber-500 mb-16 drop-shadow-[0_5px_0_theme(colors.amber.800)] italic tracking-tighter">GATHERER</h1>
           
-          <div className="flex flex-col gap-6 w-full max-w-sm">
+          <div className="flex flex-col gap-4 w-full px-8">
             <button 
               onClick={() => setGameState('MAP')}
-              className="group relative px-8 py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl border-b-8 border-emerald-800 active:border-b-0 active:translate-y-2 transition-all flex flex-col items-center"
+              className="group relative px-6 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl border-b-4 border-emerald-800 active:border-b-0 active:translate-y-1 transition-all flex flex-col items-center"
             >
-              <span className="text-3xl font-black italic tracking-widest uppercase mb-1">Campaña</span>
-              <span className="text-emerald-200 text-xs font-bold font-mono tracking-widest">Single Player Quest</span>
+              <span className="text-2xl font-black italic tracking-widest uppercase mb-0.5">Campaña</span>
+              <span className="text-emerald-200 text-[10px] font-bold font-mono tracking-widest uppercase opacity-80">Single Player Quest</span>
             </button>
 
             <button 
-              className="group relative px-8 py-6 bg-stone-700 opacity-60 cursor-not-allowed text-stone-400 rounded-2xl border-b-8 border-stone-900 flex flex-col items-center"
+              className="group relative px-6 py-4 bg-stone-800/50 opacity-40 cursor-not-allowed text-stone-400 rounded-xl border-2 border-stone-700 flex flex-col items-center"
             >
-              <span className="text-3xl font-black italic tracking-widest uppercase mb-1">Multijugador</span>
-              <span className="text-stone-500 text-xs font-bold font-mono tracking-widest uppercase">Próximamente...</span>
+              <span className="text-2xl font-black italic tracking-widest uppercase mb-0.5">Multijugador</span>
+              <span className="text-stone-500 text-[10px] font-bold font-mono tracking-widest uppercase">Próximamente...</span>
             </button>
             
-            <p className="text-stone-500 text-[10px] uppercase font-bold tracking-[0.2em] mt-8">v1.2.5 - Pedro Lopez Lagarda</p>
+            <p className="text-stone-600 text-[9px] uppercase font-bold tracking-[0.3em] mt-12 text-center opacity-70">
+              v1.2.6 — Pedro Lopez Lagarda
+            </p>
           </div>
         </div>
       </div>
@@ -2566,7 +2570,7 @@ export default function App() {
         {gameOver === "VICTORY_PHASE_1" && (
           <div className="absolute inset-0 bg-amber-500/80 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50">
             <h2 className="text-7xl font-black mb-4 tracking-tighter uppercase italic drop-shadow-xl text-yellow-100">¡Hilas fino talando!</h2>
-            <p className="text-2xl font-bold mb-12 max-w-md drop-shadow-md">Has conseguido 50 de madera superando la fase 1.</p>
+            <p className="text-2xl font-bold mb-12 max-w-md drop-shadow-md">Has conseguido 25 de madera superando la fase 1.</p>
             <button 
               onClick={() => {
                 setMaxUnlockedPhase(Math.max(maxUnlockedPhase, 2));
