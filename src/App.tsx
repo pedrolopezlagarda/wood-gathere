@@ -2238,41 +2238,46 @@ export default function App() {
         style={{ minHeight: '100dvh', width: '100vw', margin: 0, padding: 0 }}
       >
         {/* Animated Forest Background Placeholder */}
-        <div className="absolute inset-0 opacity-10 pointer-events-none">
-           <div className="absolute top-10 left-10 text-6xl">🌲</div>
-           <div className="absolute bottom-20 right-20 text-7xl">🌳</div>
-           <div className="absolute top-1/2 left-1/4 text-5xl">🌲</div>
-           <div className="absolute bottom-1/4 right-1/3 text-6xl">🌳</div>
+        <div className="absolute inset-0 opacity-5 pointer-events-none">
+           <div className="absolute top-10 left-10 text-5xl">🌲</div>
+           <div className="absolute bottom-20 right-20 text-6xl">🌳</div>
+           <div className="absolute top-1/2 left-1/4 text-4xl">🌲</div>
+           <div className="absolute bottom-1/4 right-1/3 text-5xl">🌳</div>
         </div>
 
-        <div className="z-10 flex flex-col items-center max-w-lg w-full">
-          <div className="flex flex-col items-center mb-12">
-            <div className="flex items-center gap-3 mb-1">
-               <span className="text-4xl">🪓</span>
-               <h1 className="text-6xl font-black text-white drop-shadow-[0_4px_0_theme(colors.amber.700)] italic tracking-tighter uppercase">WOOD</h1>
+        <div className="z-10 flex flex-col items-center max-w-lg w-full px-8">
+          
+          {/* Header Section: More Space, Clean Typography */}
+          <div className="flex flex-col items-center mb-24 mt-12 relative">
+            <span className="absolute -left-12 -top-4 text-4xl transform -rotate-12 opacity-80">🪓</span>
+            <div className="flex flex-col items-center gap-1">
+               <h1 className="text-5xl font-black text-white drop-shadow-[0_4px_0_theme(colors.amber.700)] italic tracking-tighter uppercase leading-none">WOOD</h1>
+               <h1 className="text-5xl font-black text-amber-500 drop-shadow-[0_4px_0_theme(colors.amber.800)] italic tracking-tighter uppercase leading-none">GATHERER</h1>
             </div>
-            <h1 className="text-6xl font-black text-amber-500 drop-shadow-[0_4px_0_theme(colors.amber.800)] italic tracking-tighter uppercase">GATHERER</h1>
           </div>
           
-          <div className="flex flex-col gap-4 w-full px-8">
+          <div className="flex flex-col gap-5 w-full max-w-xs">
             <button 
               onClick={() => setGameState('MAP')}
               className="group relative px-6 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl border-b-4 border-emerald-800 active:border-b-0 active:translate-y-1 transition-all flex flex-col items-center"
             >
-              <span className="text-2xl font-black italic tracking-widest uppercase mb-0.5">Campaña</span>
-              <span className="text-emerald-200 text-[10px] font-bold font-mono tracking-widest uppercase opacity-80">Single Player Quest</span>
+              <span className="text-xl font-black italic tracking-widest uppercase mb-0.5">Campaña</span>
+              <span className="text-emerald-200 text-[9px] font-bold font-mono tracking-widest uppercase opacity-70">Single Player Quest</span>
             </button>
 
             <button 
-              className="group relative px-6 py-4 bg-stone-800/50 opacity-40 cursor-not-allowed text-stone-400 rounded-xl border-2 border-stone-700 flex flex-col items-center"
+              className="group relative px-6 py-4 bg-stone-800/40 opacity-40 cursor-not-allowed text-stone-500 rounded-xl border-2 border-stone-800 flex flex-col items-center"
             >
-              <span className="text-2xl font-black italic tracking-widest uppercase mb-0.5">Multijugador</span>
-              <span className="text-stone-500 text-[10px] font-bold font-mono tracking-widest uppercase">Próximamente...</span>
+              <span className="text-xl font-black italic tracking-widest uppercase mb-0.5">Multijugador</span>
+              <span className="text-stone-600 text-[9px] font-bold font-mono tracking-widest uppercase">Próximamente...</span>
             </button>
             
-            <p className="text-stone-600 text-[9px] uppercase font-bold tracking-[0.3em] mt-12 text-center opacity-70">
-              v1.2.6 — Pedro Lopez Lagarda
-            </p>
+            <div className="mt-16 flex flex-col items-center opacity-40">
+              <p className="text-stone-600 text-[8px] uppercase font-bold tracking-[0.4em] text-center">
+                v1.2.7 — Pedro Lopez Lagarda
+              </p>
+              <div className="w-8 h-0.5 bg-stone-700 mt-2 rounded-full" />
+            </div>
           </div>
         </div>
       </div>
