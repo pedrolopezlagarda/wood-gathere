@@ -142,6 +142,7 @@ export default function App() {
   const grownTreeImageRef = useRef<HTMLImageElement | null>(null);
   const fortImageRef = useRef<HTMLImageElement | null>(null);
   const borderTreeImageRef = useRef<HTMLImageElement | null>(null);
+  const carniceriaImageRef = useRef<HTMLImageElement | null>(null);
   const currentPhaseRef = useRef(currentPhase);
   const currentGoldRef = useRef(0);
   const buildMarketRef = useRef(0);
@@ -193,6 +194,12 @@ export default function App() {
     imgBorderTree.src = `${import.meta.env.BASE_URL}arbol_lindes.png`;
     imgBorderTree.onload = () => {
       borderTreeImageRef.current = imgBorderTree;
+    };
+
+    const imgCarniceria = new Image();
+    imgCarniceria.src = `${import.meta.env.BASE_URL}Carniceria.png`;
+    imgCarniceria.onload = () => {
+      carniceriaImageRef.current = imgCarniceria;
     };
   }, []);
 
@@ -560,7 +567,7 @@ export default function App() {
       }
 
       if (buildButcherShopRef.current > 0) {
-        const cost = Math.floor(100 * Math.pow(2, butcherShops.length));
+        const cost = Math.floor(25 * Math.pow(2, butcherShops.length));
         if (currentWoodRef.current >= cost) {
           const pos = getValidBuildingPosition('PLAYER');
           if (pos) {
@@ -1562,7 +1569,7 @@ export default function App() {
 
       // AI Butcher Shops
       if (aiButcherTimer > 0) aiButcherTimer--;
-      const butcherShopCost = 100 * Math.pow(2, aiButcherShops.length);
+      const butcherShopCost = 25 * Math.pow(2, aiButcherShops.length);
       if (aiButcherTimer <= 0 && currentAiWoodRef.current >= butcherShopCost && aiHouses.length > 1 && aiButcherShops.length < 2) {
         const pos = getValidBuildingPosition('AI');
         if (pos) {
@@ -1958,24 +1965,42 @@ export default function App() {
         });
       }
 
-      // Draw Butcher Shops ('C' in red)
-      ctx.fillStyle = '#991b1b'; // red-800
-      ctx.font = 'bold 28px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      // Draw Butcher Shops
       butcherShops.forEach(h => {
         if (!h) return;
-        ctx.fillText('C', h.x, h.y);
-        drawHP(h.x, h.y + 5, h.hp, 100, '#16a34a');
+        if (carniceriaImageRef.current && carniceriaImageRef.current.complete) {
+          const width = 36;
+          const height = 36;
+          ctx.drawImage(carniceriaImageRef.current, h.x - width / 2, h.y - height / 2, width, height);
+        } else {
+          ctx.fillStyle = '#991b1b'; // red-800
+          ctx.font = 'bold 28px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('C', h.x, h.y);
+        }
+        drawHP(h.x, h.y + 20, h.hp, 100, '#16a34a');
       });
 
-      // Draw AI Butcher Shops ('C' in dark red)
+      // Draw AI Butcher Shops
       if (currentPhase > 4) {
-        ctx.fillStyle = '#7f1d1d'; // red-900
         aiButcherShops.forEach(h => {
           if (!h) return;
-          ctx.fillText('C', h.x, h.y);
-          drawHP(h.x, h.y + 5, h.hp, 100, '#ef4444');
+          if (carniceriaImageRef.current && carniceriaImageRef.current.complete) {
+            const width = 36;
+            const height = 36;
+            ctx.drawImage(carniceriaImageRef.current, h.x - width / 2, h.y - height / 2, width, height);
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(h.x - width / 2, h.y - height / 2, width, height);
+          } else {
+            ctx.fillStyle = '#7f1d1d'; // red-900
+            ctx.font = 'bold 28px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('C', h.x, h.y);
+          }
+          drawHP(h.x, h.y + 20, h.hp, 100, '#ef4444');
         });
       }
 
@@ -2581,37 +2606,53 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto pr-2 space-y-1">
-            {workers.map(worker => (
-              <div key={worker.id} className="flex items-center justify-between bg-stone-900 p-1.5 rounded border border-stone-800">
-                <div className="flex items-center gap-2 w-1/3 truncate">
-                  <span className="font-bold text-xs truncate max-w-[60px]">{worker.name}</span>
-                  <span className={`px-1.5 py-0.5 rounded-[3px] text-[8px] uppercase font-black ${worker.role==='WOOD'?'bg-amber-900/50 text-amber-500':worker.role==='MEAT'?'bg-red-900/50 text-red-500':'bg-blue-900/50 text-blue-400'}`}>
-                    {worker.role === 'WOOD' ? 'Leñador' : worker.role === 'MEAT' ? 'Cazador' : 'Soldado'}
-                  </span>
+          <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-3">
+            {['WOOD', 'MEAT', 'SOLDIER'].map(role => {
+              const groupWorkers = workers.filter(w => w.role === role);
+              if (groupWorkers.length === 0) return null;
+              
+              const roleName = role === 'WOOD' ? 'Leñadores' : role === 'MEAT' ? 'Cazadores' : 'Soldados';
+              const badgeColor = role === 'WOOD' ? 'bg-amber-900/50 text-amber-500 border-amber-700/50' : role === 'MEAT' ? 'bg-red-900/50 text-red-500 border-red-700/50' : 'bg-blue-900/50 text-blue-400 border-blue-700/50';
+
+              return (
+                <div key={role} className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-black border ${badgeColor}`}>
+                      {roleName} ({groupWorkers.length})
+                    </span>
+                    <div className="h-px bg-stone-700 flex-1"></div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {groupWorkers.map(worker => (
+                      <div key={worker.id} className="flex flex-col bg-stone-900 p-1.5 rounded border border-stone-700 min-w-[110px] shadow-sm">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="font-bold text-[11px] text-stone-200 truncate max-w-[80px]">{worker.name}</span>
+                        </div>
+                        <div className="flex gap-1 justify-start">
+                          {worker.role === 'WOOD' && (
+                            <>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'GATHER' } : w))} className={`px-2 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'GATHER' ? 'bg-amber-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Talar</button>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'PLANT' } : w))} className={`px-2 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'PLANT' ? 'bg-emerald-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Plantar</button>
+                            </>
+                          )}
+                          {worker.role === 'MEAT' && (
+                            <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'HUNT' } : w))} className={`px-3 py-0.5 text-[9px] rounded transition-colors flex-1 ${worker.mode === 'HUNT' ? 'bg-red-700 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Cazar</button>
+                          )}
+                          {worker.role === 'SOLDIER' && (
+                            <>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_SOLDIERS' } : w))} title="Atacar Soldados" className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'ATTACK_SOLDIERS' ? 'bg-blue-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>S</button>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_WORKERS' } : w))} title="Atacar Trabajadores" className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'ATTACK_WORKERS' ? 'bg-red-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>T</button>
+                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_BUILDINGS' } : w))} title="Atacar Edificios" className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${worker.mode === 'ATTACK_BUILDINGS' ? 'bg-orange-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>E</button>
+                            </>
+                          )}
+                          <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'IDLE' } : w))} className={`px-1.5 py-0.5 text-[9px] rounded ml-auto transition-colors ${worker.mode === 'IDLE' ? 'bg-stone-200 text-stone-900 font-bold' : 'bg-stone-800 border border-stone-600 hover:bg-stone-700'}`}>Zz</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                
-                <div className="flex gap-1 justify-end w-2/3">
-                  {worker.role === 'WOOD' && (
-                    <>
-                      <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'GATHER' } : w))} className={`px-2 py-0.5 text-[10px] rounded transition-colors ${worker.mode === 'GATHER' ? 'bg-amber-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Talar</button>
-                      <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'PLANT' } : w))} className={`px-2 py-0.5 text-[10px] rounded transition-colors ${worker.mode === 'PLANT' ? 'bg-emerald-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Plantar</button>
-                    </>
-                  )}
-                  {worker.role === 'MEAT' && (
-                    <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'HUNT' } : w))} className={`px-4 py-0.5 text-[10px] rounded transition-colors ${worker.mode === 'HUNT' ? 'bg-red-700 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Cazar</button>
-                  )}
-                  {worker.role === 'SOLDIER' && (
-                    <>
-                      <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_SOLDIERS' } : w))} className={`px-1.5 py-0.5 text-[10px] rounded transition-colors title="Atacar Soldados" ${worker.mode === 'ATTACK_SOLDIERS' ? 'bg-blue-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Sold</button>
-                      <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_WORKERS' } : w))} className={`px-1.5 py-0.5 text-[10px] rounded transition-colors title="Atacar Trabajadores" ${worker.mode === 'ATTACK_WORKERS' ? 'bg-red-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Trab</button>
-                      <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_BUILDINGS' } : w))} className={`px-1.5 py-0.5 text-[10px] rounded transition-colors title="Atacar Edificios" ${worker.mode === 'ATTACK_BUILDINGS' ? 'bg-orange-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Edif</button>
-                    </>
-                  )}
-                  <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'IDLE' } : w))} className={`px-2 py-0.5 text-[10px] rounded ml-1 transition-colors ${worker.mode === 'IDLE' ? 'bg-stone-200 text-stone-900 font-bold' : 'bg-stone-800 border border-stone-600 hover:bg-stone-700'}`}>Zz</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -2636,18 +2677,18 @@ export default function App() {
             </button>
             <button 
               onClick={() => {
-                const cost = 100 * Math.pow(2, butcherShopCount);
+                const cost = 25 * Math.pow(2, butcherShopCount);
                 console.log(`BUTCHER BUTTON CLICKED: wood=${wood}, cost=${cost}`);
                 if (wood >= cost) {
                   buildButcherShopRef.current++;
                   console.log(`Butcher queued! Ref is now: ${buildButcherShopRef.current}`);
                 }
               }}
-              disabled={wood < 100 * Math.pow(2, butcherShopCount)}
+              disabled={wood < 25 * Math.pow(2, butcherShopCount)}
               className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-800 hover:border-red-500 border border-stone-600 rounded relative"
             >
               <span className="font-bold text-xs">Carnicería</span>
-              <span className="text-[9px] text-amber-300">{100 * Math.pow(2, butcherShopCount)} M</span>
+              <span className="text-[9px] text-amber-300">{25 * Math.pow(2, butcherShopCount)} M</span>
             </button>
             <button 
               onClick={() => wood >= 50 * Math.pow(2, fortCount) && meat >= 50 * Math.pow(2, fortCount) && buildFortRef.current++}
