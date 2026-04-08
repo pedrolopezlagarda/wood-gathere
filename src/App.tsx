@@ -3,7 +3,11 @@ import React, { useEffect, useRef, useState } from 'react';
 // Game constants
 const WORLD_WIDTH = 2400;
 const WORLD_HEIGHT = 1800;
-const SPEED = 2.5;
+const SPEED = 1.2;
+const BOAR_SPEED = 0.8;
+const BOAR_EAT_DURATION = 300; 
+const BOAR_REST_DURATION = 600;
+const BOAR_REST_POINT = { x: WORLD_WIDTH - 200, y: WORLD_HEIGHT - 200 };
 
 // Phase 1 circular arena config
 const PHASE1_CENTER_X = WORLD_WIDTH / 2;
@@ -110,6 +114,8 @@ export default function App() {
   const cameraRef = useRef({ x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 });
   const targetCameraRef = useRef({ x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2, zoom: 1 });
   const isDraggingRef = useRef(false);
+  const marketOpenRef = useRef(false);
+  const lastUpdateRef = useRef(performance.now());
   const lastMousePosRef = useRef({ x: 0, y: 0 });
   const [gameState, setGameState] = useState<ViewState>('TITLE');
   const [currentPhase, setCurrentPhase] = useState(1);
@@ -256,6 +262,7 @@ export default function App() {
     currentAiWoodRef.current = 0;
     currentMeatRef.current = 0;
     currentAiMeatRef.current = 0;
+    lastUpdateRef.current = performance.now();
     let animationId: any;
 
     console.log("Game initialized for phase", currentPhase);
@@ -531,18 +538,22 @@ export default function App() {
     const loop = () => {
       if (gameOverRef.current) return;
       
+      const now = performance.now();
+      const dt = Math.min(2.0, (now - lastUpdateRef.current) / 16.67); // Normalize to 60fps, cap at 2.0 to avoid huge jumps
+      lastUpdateRef.current = now;
+
       // Smooth Camera Interpolation (LERP)
-      cameraRef.current.x += (targetCameraRef.current.x - cameraRef.current.x) * 0.15;
-      cameraRef.current.y += (targetCameraRef.current.y - cameraRef.current.y) * 0.15;
-      cameraRef.current.zoom += (targetCameraRef.current.zoom - cameraRef.current.zoom) * 0.15;
+      cameraRef.current.x += (targetCameraRef.current.x - cameraRef.current.x) * 0.15 * dt;
+      cameraRef.current.y += (targetCameraRef.current.y - cameraRef.current.y) * 0.15 * dt;
+      cameraRef.current.zoom += (targetCameraRef.current.zoom - cameraRef.current.zoom) * 0.15 * dt;
       
-      update();
+      update(dt);
       draw(ctx);
       if (ctx.restore) ctx.restore(); // Restore camera transform applied in draw()
       animationId = requestAnimationFrame(loop);
     };
 
-    const update = () => {
+    const update = (dt: number) => {
       // Check pending houses
       // Building Queue Processing
       if (buildHouseRef.current > 0) {
@@ -631,7 +642,7 @@ export default function App() {
         const members = playerCharacters.filter(c => c && c.houseId === h.id).length;
         const houseCapacity = activeCardsRef.current.has('big_house') ? 3 : 2;
         if (members < houseCapacity) {
-          h.spawnTimer--;
+          h.spawnTimer -= dt;
           if (h.spawnTimer <= 0) {
             h.spawnTimer = 3600; // 1 minute
             const newId = nextCharId++;
@@ -662,7 +673,7 @@ export default function App() {
         if (!h) return;
         const members = aiCharacters.filter(c => c && c.houseId === h.id).length;
         if (members < 2) {
-          h.spawnTimer--;
+          h.spawnTimer -= dt;
           if (h.spawnTimer <= 0) {
             h.spawnTimer = 3600; // 1 minute
             const newId = nextCharId++;
@@ -778,8 +789,8 @@ export default function App() {
               // Move to fort
               const dx = fort.x - s.x;
               const dy = fort.y - s.y;
-              s.x += (dx / distToFort) * SPEED;
-              s.y += (dy / distToFort) * SPEED;
+              s.x += (dx / distToFort) * SPEED * dt;
+              s.y += (dy / distToFort) * SPEED * dt;
               s.state = 'MOVING';
               s.target = { x: fort.x, y: fort.y };
             } else {
@@ -826,8 +837,8 @@ export default function App() {
             s.target = { x: nearestSoldier.x, y: nearestSoldier.y };
             if (minSoldierDist < ATTACK_RANGE) {
               s.state = 'ATTACKING';
-        nearestSoldier.hp -= activeCardsRef.current.has('brute') ? 2/60 : 1/60; // brute force double dmg
-              s.energy -= 0.05;
+        nearestSoldier.hp -= (activeCardsRef.current.has('brute') ? 2/60 : 1/60) * dt; 
+              s.energy -= 0.05 * dt;
             } else {
               s.state = 'MOVING';
               s.energy -= 0.01;
@@ -909,9 +920,9 @@ export default function App() {
           const dx = s.target.x - s.x;
           const dy = s.target.y - s.y;
           const dist = Math.hypot(dx, dy);
-          if (dist > 1) {
-            const moveX = (dx / dist) * SPEED;
-            const moveY = (dy / dist) * SPEED;
+          if (dist > SPEED * dt) {
+            const moveX = (dx / dist) * SPEED * dt;
+            const moveY = (dy / dist) * SPEED * dt;
             if (!isNaN(moveX) && !isNaN(moveY)) {
               s.x += moveX;
               s.y += moveY;
@@ -933,8 +944,8 @@ export default function App() {
               // Move to fort
               const dx = fort.x - s.x;
               const dy = fort.y - s.y;
-              s.x += (dx / distToFort) * SPEED;
-              s.y += (dy / distToFort) * SPEED;
+              s.x += (dx / distToFort) * SPEED * dt;
+              s.y += (dy / distToFort) * SPEED * dt;
               s.state = 'MOVING';
               s.target = { x: fort.x, y: fort.y };
             } else {
@@ -1007,15 +1018,15 @@ export default function App() {
           const dist = Math.hypot(nearestTarget.x - s.x, nearestTarget.y - s.y);
           if (dist < ATTACK_RANGE) {
             s.state = 'ATTACKING';
-            nearestTarget.hp -= 1/60;
-            s.energy -= 0.05;
+            nearestTarget.hp -= (1/60) * dt;
+            s.energy -= 0.05 * dt;
           } else if (dist > 0) {
             s.state = 'MOVING';
             s.energy -= 0.01;
             const dx = nearestTarget.x - s.x;
             const dy = nearestTarget.y - s.y;
-            const moveX = (dx / dist) * SPEED;
-            const moveY = (dy / dist) * SPEED;
+            const moveX = (dx / dist) * SPEED * dt;
+            const moveY = (dy / dist) * SPEED * dt;
             if (!isNaN(moveX) && !isNaN(moveY)) {
               s.x += moveX;
               s.y += moveY;
@@ -1131,7 +1142,7 @@ export default function App() {
         }
 
         if (isWorking) {
-          p.energy -= 0.025;
+          p.energy -= 0.025 * dt;
           if (p.energy <= 0 && !p.isExhausted) {
             p.energy = 0;
             p.isExhausted = true;
@@ -1174,7 +1185,7 @@ export default function App() {
             } else {
               // Recover energy
               if (p.energy < 100) {
-                p.energy += p.isExhausted ? 0.5 : 1.0;
+                p.energy += (p.isExhausted ? 0.5 : 1.0) * dt;
                 if (p.energy >= 100) {
                   p.energy = 100;
                   p.isExhausted = false;
@@ -1205,7 +1216,7 @@ export default function App() {
             const dy = p.target.y - p.y;
             const dist = Math.hypot(dx, dy);
             
-            if (dist < SPEED) {
+            if (dist < SPEED * dt) {
               p.x = p.target.x;
               p.y = p.target.y;
               p.state = p.onReach;
@@ -1213,12 +1224,12 @@ export default function App() {
               if (p.state === 'DROPPING_WOOD') p.timer = 30;
               if (p.state === 'PLANTING') p.timer = 60;
             } else {
-              p.x += (dx / dist) * SPEED;
-              p.y += (dy / dist) * SPEED;
+              p.x += (dx / dist) * SPEED * dt;
+              p.y += (dy / dist) * SPEED * dt;
             }
           }
         } else if (p.state === 'CHOPPING') {
-          p.timer--;
+          p.timer -= dt;
           if (p.timer <= 0) {
             if (p.target && p.target.tree && p.target.tree.wood > 0) {
               p.target.tree.wood--;
@@ -1232,7 +1243,7 @@ export default function App() {
             }
           }
         } else if (p.state === 'DROPPING_WOOD') {
-          p.timer--;
+          p.timer -= dt;
           if (p.timer <= 0) {
             p.carrying = null;
             const extraWood = (activeCardsRef.current.has('old_tree') ? 1 : 0) + (activeCardsRef.current.has('reserves') ? 1 : 0);
@@ -1256,7 +1267,7 @@ export default function App() {
             }
           }
         } else if (p.state === 'PLANTING') {
-          p.timer--;
+          p.timer -= dt;
           if (p.timer <= 0) {
             p.carrying = null;
             trees.push({
@@ -1275,20 +1286,114 @@ export default function App() {
         }
       }
 
-      // Update wild boars
-      if (Math.random() < 0.01 && wildBoars.length < 5) {
+      // Update wild boars (Advanced AI: Move to trees to eat acorns, luego a descansar)
+      if (Math.random() < 0.005 && wildBoars.length < 5) {
         wildBoars.push({
           x: Math.random() * WORLD_WIDTH,
           y: Math.random() * WORLD_HEIGHT,
-          vx: (Math.random() - 0.5) * 2,
-          vy: (Math.random() - 0.5) * 2,
+          state: 'IDLE',
+          target: null,
+          timer: 0,
+          hp: 1,
+          wobblePhase: Math.random() * Math.PI * 2,
+          wobbleSpeed: 0.02 + Math.random() * 0.04,
+          angle: 0
         });
       }
       for (const boar of wildBoars) {
-        boar.x += boar.vx;
-        boar.y += boar.vy;
-        if (boar.x < 0 || boar.x > WORLD_WIDTH) boar.vx *= -1;
-        if (boar.y < 0 || boar.y > WORLD_HEIGHT) boar.vy *= -1;
+        if (!boar) continue;
+        
+        if (boar.state === 'IDLE') {
+          // Reset wobble for new movement
+          boar.wobblePhase = Math.random() * Math.PI * 2;
+          
+          if (Math.random() < 0.1) {
+            boar.target = BOAR_REST_POINT;
+            boar.state = 'MOVING_TO_REST';
+          } else {
+            const edibleTrees = trees.filter(t => t.state === 'GROWN' && t.wood > 0);
+            if (edibleTrees.length > 0) {
+              const targetTree = edibleTrees[Math.floor(Math.random() * edibleTrees.length)];
+              boar.target = { x: targetTree.x, y: targetTree.y };
+              boar.state = 'MOVING_TO_TREE';
+            } else {
+              boar.vx = (Math.random() - 0.5) * 2;
+              boar.vy = (Math.random() - 0.5) * 2;
+              boar.state = 'WANDERING';
+              boar.timer = 60;
+            }
+          }
+        } else if (boar.state === 'MOVING_TO_TREE' || boar.state === 'MOVING_TO_REST') {
+          if (boar.target) {
+            const dx = boar.target.x - boar.x;
+            const dy = boar.target.y - boar.y;
+            const dist = Math.hypot(dx, dy);
+
+            // New: Start circling trees when close (Organic search)
+            if (dist < 60 && boar.state === 'MOVING_TO_TREE') {
+              boar.state = 'CIRCLING';
+              boar.timer = 180 + Math.random() * 180; // 3-6 seconds of circling
+              boar.angle = Math.atan2(boar.y - boar.target.y, boar.x - boar.target.x);
+            } else if (dist < BOAR_SPEED * dt) {
+              boar.x = boar.target.x;
+              boar.y = boar.target.y;
+              if (boar.state === 'MOVING_TO_REST') {
+                boar.state = 'RESTING';
+                boar.timer = BOAR_REST_DURATION;
+              } else {
+                boar.state = 'IDLE';
+              }
+            } else {
+              // Organic wobble movement
+              const baseAngle = Math.atan2(dy, dx);
+              boar.wobblePhase += boar.wobbleSpeed * dt;
+              const wobble = Math.sin(boar.wobblePhase) * 0.6; // side to side movement
+              const finalAngle = baseAngle + wobble;
+              
+              boar.x += Math.cos(finalAngle) * BOAR_SPEED * dt;
+              boar.y += Math.sin(finalAngle) * BOAR_SPEED * dt;
+            }
+          } else {
+            boar.state = 'IDLE';
+          }
+        } else if (boar.state === 'CIRCLING') {
+          // Orbit around the tree
+          boar.angle += 0.015 * dt; // orbital speed
+          const orbitRadius = 45;
+          const tx = boar.target.x + Math.cos(boar.angle) * orbitRadius;
+          const ty = boar.target.y + Math.sin(boar.angle) * orbitRadius;
+          
+          const dx = tx - boar.x;
+          const dy = ty - boar.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 1) {
+            boar.x += (dx / d) * BOAR_SPEED * dt;
+            boar.y += (dy / d) * BOAR_SPEED * dt;
+          }
+          
+          boar.timer -= dt;
+          if (boar.timer <= 0) {
+            boar.state = 'EATING';
+            boar.timer = BOAR_EAT_DURATION;
+          }
+        } else if (boar.state === 'EATING' || boar.state === 'RESTING') {
+          boar.timer -= dt;
+          // While eating, oscillate slightly for "organic" feel
+          if (boar.state === 'EATING') {
+            boar.x += Math.sin(Date.now() / 200) * 0.1 * dt;
+            boar.y += Math.cos(Date.now() / 200) * 0.1 * dt;
+          }
+          if (boar.timer <= 0) {
+            boar.state = 'IDLE';
+          }
+        } else if (boar.state === 'WANDERING') {
+          boar.x += boar.vx;
+          boar.y += boar.vy;
+          boar.timer--;
+          if (boar.timer <= 0 || boar.x < 0 || boar.x > WORLD_WIDTH || boar.y < 0 || boar.y > WORLD_HEIGHT) {
+            boar.state = 'IDLE';
+          }
+        }
       }
 
       // Update hunters
@@ -1386,20 +1491,20 @@ export default function App() {
                  wildBoars.splice(wildBoars.indexOf(h.targetBoar), 1);
                  h.targetBoar = null;
                  h.target = null;
-              } else if (dist < SPEED) {
+              } else if (dist < SPEED * dt) {
                 h.x = h.target.x;
                 h.y = h.target.y;
                 h.state = h.onReach;
-                if (h.state === 'HUNTING') h.timer = activeCardsRef.current.has('trap') ? 15 : 30;
+                if (h.state === 'HUNTING') h.timer = (activeCardsRef.current.has('trap') ? 15 : 30);
                 if (h.state === 'DROPPING_MEAT') h.timer = 30;
               } else {
-                h.x += (dx / dist) * SPEED;
-                h.y += (dy / dist) * SPEED;
+                h.x += (dx / dist) * SPEED * dt;
+                h.y += (dy / dist) * SPEED * dt;
               }
             }
           }
         } else if (h.state === 'HUNTING') {
-          h.timer--;
+          h.timer -= dt;
           if (h.timer <= 0) {
             h.carrying = 'MEAT';
             // Find nearest butcher shop
@@ -1422,7 +1527,7 @@ export default function App() {
             }
           }
         } else if (h.state === 'DROPPING_MEAT') {
-          h.timer--;
+          h.timer -= dt;
           if (h.timer <= 0) {
             h.carrying = null;
             const meatAmount = activeCardsRef.current.has('butcher') ? 8 : 4;
@@ -1512,20 +1617,20 @@ export default function App() {
                  wildBoars.splice(wildBoars.indexOf(h.targetBoar), 1);
                  h.targetBoar = null;
                  h.target = null;
-              } else if (dist < SPEED) {
+              } else if (dist < SPEED * dt) {
                 h.x = h.target.x;
                 h.y = h.target.y;
                 h.state = h.onReach;
                 if (h.state === 'HUNTING') h.timer = 30;
                 if (h.state === 'DROPPING_MEAT') h.timer = 30;
               } else {
-                h.x += (dx / dist) * SPEED;
-                h.y += (dy / dist) * SPEED;
+                h.x += (dx / dist) * SPEED * dt;
+                h.y += (dy / dist) * SPEED * dt;
               }
             }
           }
         } else if (h.state === 'HUNTING') {
-          h.timer--;
+          h.timer -= dt;
           if (h.timer <= 0) {
             h.carrying = 'MEAT';
             let nearestShop = aiButcherShops[0];
@@ -1547,7 +1652,7 @@ export default function App() {
             }
           }
         } else if (h.state === 'DROPPING_MEAT') {
-          h.timer--;
+          h.timer -= dt;
           if (h.timer <= 0) {
             h.carrying = null;
             currentAiMeatRef.current += 4;
@@ -1561,7 +1666,7 @@ export default function App() {
       // --- AI LOGIC ---
       if (currentPhase > 4) {
       // AI House Building
-      if (aiHouseTimer > 0) aiHouseTimer--;
+      if (aiHouseTimer > 0) aiHouseTimer -= dt;
       const aiHouseCost = 25 * Math.pow(4, aiHouses.length - 1);
       if (aiHouseTimer <= 0 && currentAiWoodRef.current >= aiHouseCost && aiHouses.length < 5) {
         const pos = getValidBuildingPosition('AI');
@@ -1592,7 +1697,7 @@ export default function App() {
       }
 
       // AI Butcher Shops
-      if (aiButcherTimer > 0) aiButcherTimer--;
+      if (aiButcherTimer > 0) aiButcherTimer -= dt;
       const butcherShopCost = 25 * Math.pow(2, aiButcherShops.length);
       if (aiButcherTimer <= 0 && currentAiWoodRef.current >= butcherShopCost && aiHouses.length > 1 && aiButcherShops.length < 2) {
         const pos = getValidBuildingPosition('AI');
@@ -1622,7 +1727,7 @@ export default function App() {
       }
 
       // AI Forts
-      if (aiFortTimer > 0) aiFortTimer--;
+      if (aiFortTimer > 0) aiFortTimer -= dt;
       const aiFortCost = 50 * Math.pow(2, aiForts.length); // Wood + Meat
       if (aiFortTimer <= 0 && aiButcherShops.length > 0 && currentAiWoodRef.current >= aiFortCost && currentAiMeatRef.current >= aiFortCost && aiForts.length < 2) {
         const pos = getValidBuildingPosition('AI');
@@ -1638,7 +1743,7 @@ export default function App() {
       }
 
         // AI Soldiers
-        if (aiSoldierTimer > 0) aiSoldierTimer--;
+        if (aiSoldierTimer > 0) aiSoldierTimer -= dt;
         if (aiSoldierTimer <= 0 && aiForts.length > 0 && currentAiMeatRef.current >= 50 && aiSoldiers.length < 10) {
           currentAiMeatRef.current -= 50;
           setAiMeat(currentAiMeatRef.current);
@@ -1678,7 +1783,7 @@ export default function App() {
         }
 
         if (isWorking) {
-          aiPerson.energy -= 0.025;
+          aiPerson.energy -= 0.025 * dt;
           if (aiPerson.energy <= 0 && !aiPerson.isExhausted) {
             aiPerson.energy = 0;
             aiPerson.isExhausted = true;
@@ -1744,7 +1849,7 @@ export default function App() {
             const dy = aiPerson.target.y - aiPerson.y;
             const dist = Math.hypot(dx, dy);
             
-            if (dist < SPEED) {
+            if (dist < SPEED * dt) {
               aiPerson.x = aiPerson.target.x;
               aiPerson.y = aiPerson.target.y;
               aiPerson.state = aiPerson.onReach;
@@ -1752,12 +1857,12 @@ export default function App() {
               if (aiPerson.state === 'DROPPING_WOOD') aiPerson.timer = 30;
               if (aiPerson.state === 'PLANTING') aiPerson.timer = 60;
             } else {
-              aiPerson.x += (dx / dist) * SPEED;
-              aiPerson.y += (dy / dist) * SPEED;
+              aiPerson.x += (dx / dist) * SPEED * dt;
+              aiPerson.y += (dy / dist) * SPEED * dt;
             }
           }
         } else if (aiPerson.state === 'CHOPPING') {
-          aiPerson.timer--;
+          aiPerson.timer -= dt;
           if (aiPerson.timer <= 0) {
             if (aiPerson.target && aiPerson.target.tree && aiPerson.target.tree.wood > 0) {
               aiPerson.target.tree.wood--;
@@ -1771,7 +1876,7 @@ export default function App() {
             }
           }
         } else if (aiPerson.state === 'DROPPING_WOOD') {
-          aiPerson.timer--;
+          aiPerson.timer -= dt;
           if (aiPerson.timer <= 0) {
             aiPerson.carrying = null;
             currentAiWoodRef.current += 2;
@@ -1779,7 +1884,7 @@ export default function App() {
             aiPerson.state = 'IDLE';
           }
         } else if (aiPerson.state === 'GETTING_SEED') {
-          aiPerson.timer--;
+          aiPerson.timer -= dt;
           if (aiPerson.timer <= 0) {
             aiPerson.carrying = 'SEED';
             const pos = getValidTreePosition(trees, 'AI');
@@ -1793,7 +1898,7 @@ export default function App() {
             }
           }
         } else if (aiPerson.state === 'PLANTING') {
-          aiPerson.timer--;
+          aiPerson.timer -= dt;
           if (aiPerson.timer <= 0) {
             aiPerson.carrying = null;
             trees.push({
@@ -2673,10 +2778,8 @@ export default function App() {
                 <p className="text-stone-500 text-sm italic">No quedan cartas en el mazo.</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 mb-5">
-                  {deck.map((card, i) => (
-                    <div key={card.id} className={`rounded-xl border-2 p-4 flex flex-col gap-2 transition-all ${
-                      i === 0 ? 'border-yellow-500 bg-yellow-950/40' : 'border-stone-700 bg-stone-800/50 opacity-50'
-                    }`}>
+                  {deck.map((card) => (
+                    <div key={card.id} className="rounded-xl border-2 border-yellow-500 bg-yellow-950/40 p-4 flex flex-col gap-2 transition-all">
                       <div className="flex items-center gap-2">
                         <span className="text-2xl">{card.icon}</span>
                         <span className="font-black text-sm text-white">{card.name}</span>
@@ -2684,24 +2787,20 @@ export default function App() {
                       <p className="text-xs text-stone-300 leading-relaxed flex-1">{card.effect}</p>
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-yellow-400 font-black text-sm">💰 {card.cost} oro</span>
-                        {i === 0 ? (
-                          <button
-                            onClick={() => {
-                              if (gold >= card.cost) {
-                                setGold(g => g - card.cost);
-                                currentGoldRef.current -= card.cost;
-                                setActiveCards(prev => [...prev, card]);
-                                setDeck(prev => prev.slice(1));
-                              }
-                            }}
-                            disabled={gold < card.cost}
-                            className="px-3 py-1 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed text-yellow-950 font-black text-xs rounded-lg transition-colors"
-                          >
-                            Comprar
-                          </button>
-                        ) : (
-                          <span className="text-stone-600 text-xs italic">Bloqueada</span>
-                        )}
+                        <button
+                          onClick={() => {
+                            if (gold >= card.cost) {
+                              setGold(g => g - card.cost);
+                              currentGoldRef.current -= card.cost;
+                              setActiveCards(prev => [...prev, card]);
+                              setDeck(prev => prev.filter(c => c.id !== card.id));
+                            }
+                          }}
+                          disabled={gold < card.cost}
+                          className="px-3 py-1 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed text-yellow-950 font-black text-xs rounded-lg transition-colors"
+                        >
+                          Comprar
+                        </button>
                       </div>
                     </div>
                   ))}
