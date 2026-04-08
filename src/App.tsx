@@ -429,7 +429,7 @@ export default function App() {
       // Check pending houses
       while (buildHouseRef.current > 0) {
         buildHouseRef.current--;
-        const currentCost = 25 * Math.pow(4, playerHouses.length - 1);
+        const currentCost = 25 * Math.pow(2, playerHouses.length - 1);
         if (currentWoodRef.current >= currentCost) {
           const pos = getValidBuildingPosition('PLAYER');
           if (pos) {
@@ -2283,15 +2283,15 @@ export default function App() {
           <h3 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2 shrink-0">Construcción</h3>
           <div className="grid grid-cols-2 gap-1 flex-1">
             <button 
-              onClick={() => wood >= 25 * Math.pow(4, playerHouseCount - 1) && buildHouseRef.current++}
-              disabled={wood < 25 * Math.pow(4, playerHouseCount - 1)}
+              onClick={() => wood >= 25 * Math.pow(2, playerHouseCount - 1) && buildHouseRef.current++}
+              disabled={wood < 25 * Math.pow(2, playerHouseCount - 1)}
               className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-amber-700 hover:border-amber-500 border border-stone-600 rounded relative"
             >
               <span className="font-bold text-xs">Casa</span>
-              <span className="text-[9px] text-amber-300">{25 * Math.pow(4, playerHouseCount - 1)} M</span>
+              <span className="text-[9px] text-amber-300">{25 * Math.pow(2, playerHouseCount - 1)} M</span>
             </button>
             <button 
-              onClick={() => { buildButcherShopRef.current++; }}
+              onClick={() => wood >= 100 * Math.pow(2, butcherShopCount) && buildButcherShopRef.current++}
               disabled={wood < 100 * Math.pow(2, butcherShopCount)}
               className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-800 hover:border-red-500 border border-stone-600 rounded relative"
             >
