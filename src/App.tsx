@@ -25,7 +25,7 @@ interface Tree extends Point {
 }
 
 type GameMode = 'GATHER' | 'PLANT' | 'IDLE' | 'HUNT' | 'ATTACK_WORKERS' | 'ATTACK_BUILDINGS' | 'ATTACK_SOLDIERS';
-type ViewState = 'TITLE' | 'MAP' | 'PLAYING';
+type ViewState = 'TITLE' | 'MAP' | 'PLAYING' | 'LOBBY';
 
 const NAMES = ['Juan', 'Antonio', 'Carlos', 'David', 'Elena', 'Paco', 'Lucia', 'Maria', 'Pepe', 'Luis', 'Marcos', 'Sofia', 'Hugo', 'Lola', 'Rafa'];
 type WorkerConfig = { id: number, name: string, mode: GameMode, role: 'WOOD' | 'MEAT' | 'SOLDIER' };
@@ -132,6 +132,15 @@ export default function App() {
   const [gameOver, setGameOver] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [gold, setGold] = useState(0);
+  const [playerName, setPlayerName] = useState('');
+  const [showNameEntry, setShowNameEntry] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{user: string, text: string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [onlinePlayers, setOnlinePlayers] = useState([
+    { name: 'Paco_El_Leñador', status: 'Lobby' },
+    { name: 'Maria_G', status: 'Jugando' },
+    { name: 'Carlos_R', status: 'Lobby' },
+  ]);
   const [marketOpen, setMarketOpen] = useState(false);
   const [deck, setDeck] = useState<Card[]>([]);
   const [activeCards, setActiveCards] = useState<Card[]>([]);
@@ -2266,10 +2275,11 @@ export default function App() {
             </button>
 
             <button 
-              className="group relative px-6 py-4 bg-stone-800/40 opacity-40 cursor-not-allowed text-stone-500 rounded-xl border-2 border-stone-800 flex flex-col items-center"
+              onClick={() => setShowNameEntry(true)}
+              className="group relative px-6 py-4 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl border-b-4 border-stone-900 active:border-b-0 active:translate-y-1 transition-all flex flex-col items-center"
             >
               <span className="text-xl font-black italic tracking-widest uppercase mb-0.5">Multijugador</span>
-              <span className="text-stone-600 text-[9px] font-bold font-mono tracking-widest uppercase">Próximamente...</span>
+              <span className="text-stone-500 text-[9px] font-bold font-mono tracking-widest uppercase">Entrar al Lobby</span>
             </button>
             
             <div className="mt-16 flex flex-col items-center opacity-40">
@@ -2278,6 +2288,151 @@ export default function App() {
               </p>
               <div className="w-8 h-0.5 bg-stone-700 mt-2 rounded-full" />
             </div>
+          </div>
+        </div>
+
+        {/* Name Entry Popup */}
+        {showNameEntry && (
+          <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
+            <div className="bg-stone-900 border-4 border-amber-600 p-8 rounded-3xl max-w-sm w-full shadow-[0_0_50px_rgba(217,119,6,0.2)]">
+              <h2 className="text-3xl font-black text-amber-500 italic mb-6 uppercase tracking-tighter">¿Cómo te llamas?</h2>
+              <input 
+                type="text" 
+                maxLength={15}
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                placeholder="Introduce tu nick..."
+                className="w-full bg-stone-800 border-2 border-stone-700 rounded-xl p-4 text-white font-bold mb-6 focus:outline-none focus:border-amber-600 transition-colors"
+                onKeyDown={(e) => e.key === 'Enter' && playerName && setGameState('LOBBY')}
+              />
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setShowNameEntry(false)}
+                  className="flex-1 px-4 py-3 bg-stone-800 text-stone-400 font-bold rounded-xl hover:bg-stone-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  disabled={!playerName}
+                  onClick={() => { setShowNameEntry(false); setGameState('LOBBY'); }}
+                  className="flex-1 px-4 py-3 bg-amber-600 text-white font-black rounded-xl hover:bg-amber-500 disabled:opacity-50 transition-all uppercase italic"
+                >
+                  Entrar →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (gameState === 'LOBBY') {
+    return (
+      <div 
+        className="bg-stone-950 flex font-sans overflow-hidden h-screen w-screen"
+        style={{ margin: 0, padding: 0 }}
+      >
+        {/* Left: Players List */}
+        <div className="w-1/4 border-r-2 border-stone-800 flex flex-col bg-stone-900/50">
+          <div className="p-6 border-b-2 border-stone-800">
+            <h2 className="text-xl font-black text-amber-500 italic tracking-tighter uppercase mb-1">Jugadores Online</h2>
+            <p className="text-[10px] text-stone-500 font-bold tracking-widest">SÉ EL HOST DE LA PARTIDA</p>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            <div className="p-4 bg-amber-600/10 border border-amber-600/30 rounded-xl flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="font-bold text-amber-500 whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">{playerName} (Tú)</span>
+              </div>
+              <span className="text-[9px] font-black bg-amber-600 text-white px-2 py-0.5 rounded italic">LOBBY</span>
+            </div>
+            {onlinePlayers.map((p, i) => (
+              <div key={i} className="p-4 bg-stone-800/50 border border-stone-700/50 rounded-xl flex justify-between items-center group">
+                <div className="flex items-center gap-3">
+                  <span className={`w-2 h-2 ${p.status === 'Lobby' ? 'bg-green-500' : 'bg-stone-600'} rounded-full`}></span>
+                  <span className="font-bold text-stone-300">{p.name}</span>
+                </div>
+                {p.status === 'Lobby' ? (
+                  <button className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded italic opacity-0 group-hover:opacity-100 transition-opacity">INVITAR</button>
+                ) : (
+                  <span className="text-[9px] font-black bg-stone-700 text-stone-500 px-2 py-0.5 rounded italic uppercase">{p.status}</span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="p-4 border-t-2 border-stone-800">
+             <button 
+              onClick={() => { setGameState('TITLE'); }}
+              className="w-full py-3 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold rounded-xl transition-all"
+            >
+              ← Volver al Menú
+            </button>
+          </div>
+        </div>
+
+        {/* Center: Hero/Room Area */}
+        <div className="flex-1 flex flex-col items-center justify-center p-12 relative">
+           <div className="absolute top-12 text-center">
+              <h1 className="text-6xl font-black text-white/10 italic tracking-tighter uppercase select-none">MULTIPLAYER</h1>
+           </div>
+           
+           <div className="flex flex-col items-center gap-8 text-center max-w-md">
+              <div className="w-32 h-32 bg-amber-600/20 rounded-full flex items-center justify-center text-6xl animate-pulse">🏹</div>
+              <h2 className="text-4xl font-black text-white italic tracking-tighter uppercase leading-none">Buscando Aliados...</h2>
+              <p className="text-stone-500 font-bold">¡Invita a tus amigos del chat o espera a que alguien te desafíe! Soporte para hasta 4 jugadores.</p>
+              
+              <button className="mt-8 px-12 py-6 bg-amber-600 hover:bg-amber-500 text-white rounded-2xl border-b-8 border-amber-800 active:border-b-0 active:translate-y-2 transition-all flex flex-col items-center w-full">
+                <span className="text-3xl font-black italic tracking-widest uppercase">Crear Partida</span>
+                <span className="text-amber-200 text-xs font-bold font-mono tracking-widest uppercase opacity-70">Privada / Pública</span>
+              </button>
+           </div>
+        </div>
+
+        {/* Right: Global Chat */}
+        <div className="w-1/4 border-l-2 border-stone-800 flex flex-col bg-stone-900/80">
+          <div className="p-6 border-b-2 border-stone-800">
+            <h2 className="text-xl font-black text-white italic tracking-tighter uppercase mb-1">Chat Global</h2>
+            <div className="flex items-center gap-2">
+               <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+               <span className="text-[10px] text-green-500 font-bold tracking-widest">LIVE SERVER</span>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+            <div className="text-[10px] text-stone-500 font-bold text-center my-4 uppercase tracking-[0.3em]">Conectado al canal global</div>
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex flex-col ${msg.user === playerName ? 'items-end' : 'items-start'}`}>
+                <span className="text-[9px] font-black text-stone-500 mb-0.5 uppercase tracking-tighter">{msg.user}</span>
+                <div className={`px-4 py-2 rounded-2xl max-w-[90%] text-sm font-bold ${msg.user === playerName ? 'bg-amber-600 text-white rounded-tr-none' : 'bg-stone-800 text-stone-200 rounded-tl-none'}`}>
+                  {msg.text}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="p-4 border-t-2 border-stone-800 bg-stone-900">
+            <form 
+              className="relative"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!chatInput.trim()) return;
+                setChatMessages([...chatMessages, { user: playerName, text: chatInput }]);
+                setChatInput('');
+              }}
+            >
+              <input 
+                type="text" 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Escribe un mensaje..."
+                className="w-full bg-stone-950 border border-stone-800 rounded-xl p-4 pr-12 text-sm text-white font-bold focus:outline-none focus:border-amber-600 transition-colors"
+              />
+              <button 
+                type="submit"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 hover:text-amber-400 p-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              </button>
+            </form>
           </div>
         </div>
       </div>
