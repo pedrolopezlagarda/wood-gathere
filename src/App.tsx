@@ -148,6 +148,8 @@ export default function App() {
     { name: 'Carlos_R', status: 'Lobby' },
   ]);
   const [marketOpen, setMarketOpen] = useState(false);
+  const grassTileImageRef = useRef<HTMLImageElement | null>(null);
+  const grassPatternRef = useRef<CanvasPattern | null>(null);
   const [deck, setDeck] = useState<Card[]>([]);
   const [activeCards, setActiveCards] = useState<Card[]>([]);
 
@@ -166,6 +168,11 @@ export default function App() {
   const plantedTreeImageRef = useRef<HTMLImageElement | null>(null);
   const grownTreeImageRef = useRef<HTMLImageElement | null>(null);
   const fortImageRef = useRef<HTMLImageElement | null>(null);
+  const grassImageRef = useRef<HTMLImageElement | null>(null);
+  const rockImageRef = useRef<HTMLImageElement | null>(null);
+
+  const terrainPatchesRef = useRef<{x: number, y: number, r: number, color: string}[]>([]);
+  const decorationsRef = useRef<{x: number, y: number, type: 'grass' | 'rock', scale: number, rotation: number}[]>([]);
   const borderTreeImageRef = useRef<HTMLImageElement | null>(null);
   const carniceriaImageRef = useRef<HTMLImageElement | null>(null);
   const currentPhaseRef = useRef(currentPhase);
@@ -173,6 +180,30 @@ export default function App() {
   const buildMarketRef = useRef(0);
   const activeCardsRef = useRef<Set<string>>(new Set());
 
+  // Entity Refs for Editor and Logic Access
+  const playerHousesRef = useRef<(Point & { id: number, hp: number, spawnTimer: number })[]>([]);
+  const aiHousesRef = useRef<(Point & { id: number, hp: number, spawnTimer: number })[]>([]);
+  const butcherShopsRef = useRef<(Point & { id: number, hp: number })[]>([]);
+  const aiButcherShopsRef = useRef<(Point & { id: number, hp: number })[]>([]);
+  const playerFortsRef = useRef<(Point & { id: number, hp: number })[]>([]);
+  const aiFortsRef = useRef<(Point & { id: number, hp: number })[]>([]);
+  const playerMarketsRef = useRef<(Point & { id: number, hp: number })[]>([]);
+  const playerHuntersRef = useRef<any[]>([]);
+  const aiHuntersRef = useRef<any[]>([]);
+  const playerCharactersRef = useRef<any[]>([]);
+  const aiCharactersRef = useRef<any[]>([]);
+  const playerSoldiersRef = useRef<any[]>([]);
+  const aiSoldiersRef = useRef<any[]>([]);
+  const wildBoarsRef = useRef<any[]>([]);
+  const treesRef = useRef<Tree[]>([]);
+  
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [editorTool, setEditorTool] = useState<string>('MOVE');
+  const nextBuildingIdRef = useRef(1);
+  const nextCharIdRef = useRef(1);
+  const nextTreeIdRef = useRef(1);
+  const initialPinchDistRef = useRef<number | null>(null);
+  const initialZoomRef = useRef<number | null>(null);
   useEffect(() => {
     activeCardsRef.current = new Set(activeCards.map(c => c.id));
   }, [activeCards]);
@@ -226,6 +257,40 @@ export default function App() {
     imgCarniceria.onload = () => {
       carniceriaImageRef.current = imgCarniceria;
     };
+
+    const imgGrass = new Image();
+    imgGrass.src = `${import.meta.env.BASE_URL}hierba_decorativa.png`;
+    imgGrass.onload = () => {
+      grassImageRef.current = imgGrass;
+    };
+
+    const imgRock = new Image();
+    imgRock.src = `${import.meta.env.BASE_URL}roca_decorativa.png`;
+    imgRock.onload = () => {
+      rockImageRef.current = imgRock;
+    };
+
+    const imgGrassTile = new Image();
+    imgGrassTile.src = `${import.meta.env.BASE_URL}grass_tile_v2.png`;
+    imgGrassTile.onload = () => {
+      grassTileImageRef.current = imgGrassTile;
+      
+      // Create a slightly smaller "macro" pattern to find the perfect balance
+      const offCanvas = document.createElement('canvas');
+      const size = 120; // Slightly smaller than 144px
+      offCanvas.width = size;
+      offCanvas.height = size;
+      const offCtx = offCanvas.getContext('2d');
+      if (offCtx) {
+        offCtx.drawImage(imgGrassTile, 0, 0, size, size);
+        // Create pattern using an offscreen canvas to ensure it's always ready
+        const dummyCanvas = document.createElement('canvas');
+        const dummyCtx = dummyCanvas.getContext('2d');
+        if (dummyCtx) {
+           grassPatternRef.current = dummyCtx.createPattern(offCanvas, 'repeat');
+        }
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -276,20 +341,22 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Game state
-    let nextBuildingId = 1;
+    // Initialize Entity Refs
+    nextBuildingIdRef.current = 2;
+    nextCharIdRef.current = 2;
+    nextTreeIdRef.current = 1;
+
     const houseX = currentPhase === 1 ? PHASE1_CENTER_X : 150;
     const houseY = currentPhase === 1 ? PHASE1_CENTER_Y : 300;
-    const playerHouses: (Point & { id: number, hp: number, spawnTimer: number })[] = [{ id: 0, x: houseX, y: houseY, hp: 100, spawnTimer: 3600 }];
-    const butcherShops: (Point & { id: number, hp: number })[] = [];
-    const playerMarkets: (Point & { id: number, hp: number })[] = [];
-    const hunters: any[] = [];
-    const playerForts: (Point & { id: number, hp: number })[] = [];
-    const playerSoldiers: any[] = [];
-    const wildBoars: any[] = [];
-    let nextCharId = 1;
-
-    const playerCharacters = [
+    
+    playerHousesRef.current = [{ id: 0, x: houseX, y: houseY, hp: 100, spawnTimer: 3600 }];
+    butcherShopsRef.current = [];
+    playerMarketsRef.current = [];
+    playerFortsRef.current = [];
+    playerSoldiersRef.current = [];
+    wildBoarsRef.current = [];
+    
+    playerCharactersRef.current = [
       {
         id: 0,
         houseId: 0,
@@ -308,12 +375,14 @@ export default function App() {
       }
     ];
 
-    const aiHouses: (Point & { id: number, hp: number, spawnTimer: number })[] = currentPhase <= 4 ? [] : [{ id: 1000, x: 650, y: 300, hp: 100, spawnTimer: 3600 }];
-    const aiButcherShops: (Point & { id: number, hp: number })[] = [];
-    const aiHunters: any[] = [];
-    const aiForts: (Point & { id: number, hp: number })[] = [];
-    const aiSoldiers: any[] = [];
-    const aiCharacters = currentPhase <= 4 ? [] : [
+    aiHousesRef.current = currentPhase <= 4 ? [] : [{ id: 1000, x: 650, y: 300, hp: 100, spawnTimer: 3600 }];
+    aiButcherShopsRef.current = [];
+    aiFortsRef.current = [];
+    aiSoldiersRef.current = [];
+    playerHuntersRef.current = [];
+    aiHuntersRef.current = [];
+
+    aiCharactersRef.current = currentPhase <= 4 ? [] : [
       {
         id: 1000,
         houseId: 1000,
@@ -331,6 +400,28 @@ export default function App() {
         currentMode: 'GATHER' as GameMode,
       }
     ];
+    
+    // Aliases for local usage within initialization to satisfy existing logic
+    const playerHouses = playerHousesRef.current;
+    const aiHouses = aiHousesRef.current;
+    const butcherShops = butcherShopsRef.current;
+    const aiButcherShops = aiButcherShopsRef.current;
+    const playerForts = playerFortsRef.current;
+    const aiForts = aiFortsRef.current;
+    const playerMarkets = playerMarketsRef.current;
+    const playerCharacters = playerCharactersRef.current;
+    const aiCharacters = aiCharactersRef.current;
+    const wildBoars = wildBoarsRef.current;
+    const playerSoldiers = playerSoldiersRef.current;
+    const aiSoldiers = aiSoldiersRef.current;
+    const hunters = playerHuntersRef.current;
+    const aiHunters = aiHuntersRef.current;
+    
+    // For ID references which are already numeric, we need to be careful.
+    // However, much of the code incremented local 'nextBuildingId' vars.
+    // We'll use getters/setters or just proxy them locally if needed.
+    // For now, let's just make the initialization block use the logic normally
+    // and we'll refactor the update loop to use the Refs.
 
     const MIN_TREE_DISTANCE = 48;
     const MIN_HOUSE_DISTANCE = 64;
@@ -422,44 +513,47 @@ export default function App() {
       return { x: baseX, y: baseY };
     };
     
-    // Generate initial trees for both players
-    let nextTreeId = 0;
+    // 4) Clean Background (Removed patches and decorations for a cleaner look)
+    terrainPatchesRef.current = [];
+    decorationsRef.current = [];
+
     const trees: Tree[] = [];
-    for (let i = 0; i < 8; i++) {
-      const pos = getValidTreePosition(trees, 'PLAYER');
-      if (pos) {
-        trees.push({
-          id: nextTreeId++,
-          x: pos.x,
-          y: pos.y,
-          wood: 3,
-          state: 'GROWN',
-          owner: 'PLAYER'
-        });
-      }
-    }
-    if (currentPhase > 4) {
-      for (let i = 0; i < 8; i++) {
-        const pos = getValidTreePosition(trees, 'AI');
-        if (pos) {
-          trees.push({
-            id: nextTreeId++,
-            x: pos.x,
-            y: pos.y,
-            wood: 3,
-            state: 'GROWN',
-            owner: 'AI'
-          });
+    let nextTreeId = 0;
+
+    // Helper for clustered generation
+    const addCluster = (centerX: number, centerY: number, count: number, spread: number, owner: 'PLAYER' | 'AI' | 'BORDER', existing: Tree[]) => {
+        for (let j = 0; j < count; j++) {
+            const rx = centerX + (Math.random() - 0.5) * spread;
+            const ry = centerY + (Math.random() - 0.5) * spread;
+            
+            // Boundary checks for player/AI trees
+            if (owner !== 'BORDER') {
+                if (rx < 40 || rx > WORLD_WIDTH - 40 || ry < 40 || ry > WORLD_HEIGHT - 40) continue;
+            }
+
+            // Simple distance check
+            const tooClose = existing.some(t => Math.hypot(t.x - rx, t.y - ry) < 32);
+            if (!tooClose) {
+                existing.push({
+                    id: nextTreeId++,
+                    x: rx,
+                    y: ry,
+                    wood: owner === 'BORDER' ? 0 : 3,
+                    state: 'GROWN',
+                    owner
+                });
+            }
         }
-      }
-    }
+    };
+
     if (currentPhase === 1) {
-      // Phase 1: circular border forest
-      // 1) Dense ring of trees exactly at/around the play radius
+      // Phase 1 Clustered
+      addCluster(PHASE1_CENTER_X, PHASE1_CENTER_Y, 15, 300, 'PLAYER', trees);
+      
+      // Border Rings
       const RING_COUNT = 80;
       for (let i = 0; i < RING_COUNT; i++) {
         const angle = (i / RING_COUNT) * Math.PI * 2;
-        // Several concentric rings
         for (let ring = 0; ring < 4; ring++) {
           const r = PHASE1_BORDER_RADIUS + ring * 38 + (Math.random() - 0.5) * 20;
           const rx = PHASE1_CENTER_X + Math.cos(angle + ring * 0.05) * r;
@@ -467,39 +561,26 @@ export default function App() {
           trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
         }
       }
-      // 2) Fill the entire map exterior with dense trees
-      const EXTERIOR_DENSITY = 3000;
-      for (let i = 0; i < EXTERIOR_DENSITY; i++) {
-        const rx = Math.random() * WORLD_WIDTH;
-        const ry = Math.random() * WORLD_HEIGHT;
-        const distFromCenter = Math.hypot(rx - PHASE1_CENTER_X, ry - PHASE1_CENTER_Y);
-        // Only place trees outside the circular play zone
-        if (distFromCenter < PHASE1_BORDER_RADIUS - 10) continue;
-        trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
-      }
-      // 3) Also extend beyond world bounds like in other phases
-      const BORDER_MARGIN = 800;
-      const OUTER_DENSITY = 2000;
-      for (let i = 0; i < OUTER_DENSITY; i++) {
-        let rx = -BORDER_MARGIN + Math.random() * (WORLD_WIDTH + BORDER_MARGIN * 2);
-        let ry = -BORDER_MARGIN + Math.random() * (WORLD_HEIGHT + BORDER_MARGIN * 2);
-        if (rx > 0 && rx < WORLD_WIDTH && ry > 0 && ry < WORLD_HEIGHT) continue;
-        trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
+      
+      // Exterior Density Seeds
+      for (let i = 0; i < 40; i++) {
+          const sx = Math.random() * WORLD_WIDTH;
+          const sy = Math.random() * WORLD_HEIGHT;
+          if (Math.hypot(sx - PHASE1_CENTER_X, sy - PHASE1_CENTER_Y) < PHASE1_BORDER_RADIUS) continue;
+          addCluster(sx, sy, 50, 400, 'BORDER', trees);
       }
     } else {
-      // Generate massive irregular border forest (other phases)
-      const BORDER_MARGIN = 1500;
-      const FOREST_DENSITY = 8000;
-      for (let i = 0; i < FOREST_DENSITY; i++) {
-          let rx = -BORDER_MARGIN + Math.random() * (WORLD_WIDTH + BORDER_MARGIN * 2);
-          let ry = -BORDER_MARGIN + Math.random() * (WORLD_HEIGHT + BORDER_MARGIN * 2);
-          
-          // Push trees outside the playable area if they fall inside
-          if (rx > -16 && rx < WORLD_WIDTH + 16 && ry > -16 && ry < WORLD_HEIGHT + 16) {
-              continue; 
-          }
+      // General Phases Clustered
+      addCluster(150, 300, 10, 200, 'PLAYER', trees);
+      if (currentPhase > 4) addCluster(650, 300, 10, 200, 'AI', trees);
 
-          trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
+      const BORDER_MARGIN = 1500;
+      // Border seeds
+      for (let i = 0; i < 150; i++) {
+          const rx = -BORDER_MARGIN + Math.random() * (WORLD_WIDTH + BORDER_MARGIN * 2);
+          const ry = -BORDER_MARGIN + Math.random() * (WORLD_HEIGHT + BORDER_MARGIN * 2);
+          if (rx > -50 && rx < WORLD_WIDTH + 50 && ry > -50 && ry < WORLD_HEIGHT + 50) continue;
+          addCluster(rx, ry, 40, 500, 'BORDER', trees);
       }
     }
 
@@ -535,23 +616,64 @@ export default function App() {
 
 
 
+    const processUpdate = (now: number) => {
+      if (gameOverRef.current) return;
+      
+      let delta = (now - lastUpdateRef.current) / 16.67;
+      lastUpdateRef.current = now;
+
+      // Cap extreme jumps to 1 hour (216000 frames @ 60fps) to prevent freezing
+      delta = Math.min(delta, 216000); 
+
+      // Process logic in stable steps to maintain physics consistency
+      const MAX_STEP = 2.0;
+      while (delta > 0) {
+        const step = Math.min(delta, MAX_STEP);
+        update(step);
+        delta -= step;
+        if (delta < 0.01) break;
+      }
+    };
+
     const loop = () => {
       if (gameOverRef.current) return;
       
       const now = performance.now();
-      const dt = Math.min(2.0, (now - lastUpdateRef.current) / 16.67); // Normalize to 60fps, cap at 2.0 to avoid huge jumps
-      lastUpdateRef.current = now;
+      processUpdate(now);
 
       // Smooth Camera Interpolation (LERP)
-      cameraRef.current.x += (targetCameraRef.current.x - cameraRef.current.x) * 0.15 * dt;
-      cameraRef.current.y += (targetCameraRef.current.y - cameraRef.current.y) * 0.15 * dt;
-      cameraRef.current.zoom += (targetCameraRef.current.zoom - cameraRef.current.zoom) * 0.15 * dt;
+      // Use a fixed dt of 1.0 for visual interpolation to keep it smooth regardless of logic slowdowns
+      const visualDt = 1.0; 
+      cameraRef.current.x += (targetCameraRef.current.x - cameraRef.current.x) * 0.15 * visualDt;
+      cameraRef.current.y += (targetCameraRef.current.y - cameraRef.current.y) * 0.15 * visualDt;
+      cameraRef.current.zoom += (targetCameraRef.current.zoom - cameraRef.current.zoom) * 0.15 * visualDt;
       
-      update(dt);
       draw(ctx);
-      if (ctx.restore) ctx.restore(); // Restore camera transform applied in draw()
+      if (ctx.restore) ctx.restore(); 
       animationId = requestAnimationFrame(loop);
     };
+
+    // Background logic loop using SetInterval (which runs in background tabs @ ~1Hz)
+    let backgroundInterval: any = null;
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Stop RAF if needed, though browsers do this automatically. 
+        // We start a logic-only pulse for background progression.
+        if (!backgroundInterval) {
+          backgroundInterval = setInterval(() => {
+            processUpdate(performance.now());
+          }, 1000);
+        }
+      } else {
+        if (backgroundInterval) {
+          clearInterval(backgroundInterval);
+          backgroundInterval = null;
+        }
+        // When coming back, the first processUpdate call will handle the catch-up
+        // for the time elapsed between the last background pulse and now.
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     const update = (dt: number) => {
       // Check pending houses
@@ -565,11 +687,11 @@ export default function App() {
             buildHouseRef.current--;
             currentWoodRef.current -= cost;
             setWood(Math.floor(currentWoodRef.current));
-            const houseId = nextBuildingId++;
+            const houseId = nextBuildingIdRef.current++;
             const houseHp = activeCardsRef.current.has('strategist') ? 150 : 100;
             playerHouses.push({ id: houseId, x: pos.x, y: pos.y, hp: houseHp, spawnTimer: 3600 });
             setPlayerHouseCount(playerHouses.length);
-            const newId = nextCharId++;
+            const newId = nextCharIdRef.current++;
             playerCharacters.push({
               id: newId,
               houseId: houseId,
@@ -605,11 +727,11 @@ export default function App() {
             buildButcherShopRef.current--;
             currentWoodRef.current -= cost;
             setWood(Math.floor(currentWoodRef.current));
-            const shopId = nextBuildingId++;
+            const shopId = nextBuildingIdRef.current++;
             const shopHp = activeCardsRef.current.has('strategist') ? 150 : 100;
             butcherShops.push({ id: shopId, x: pos.x, y: pos.y, hp: shopHp });
             setButcherShopCount(butcherShops.length);
-            const newId = nextCharId++;
+            const newId = nextCharIdRef.current++;
             hunters.push({
               id: newId,
               shopId: shopId,
@@ -645,7 +767,7 @@ export default function App() {
           h.spawnTimer -= dt;
           if (h.spawnTimer <= 0) {
             h.spawnTimer = 3600; // 1 minute
-            const newId = nextCharId++;
+            const newId = nextCharIdRef.current++;
             playerCharacters.push({
               id: newId,
               houseId: h.id,
@@ -676,7 +798,7 @@ export default function App() {
           h.spawnTimer -= dt;
           if (h.spawnTimer <= 0) {
             h.spawnTimer = 3600; // 1 minute
-            const newId = nextCharId++;
+            const newId = nextCharIdRef.current++;
             aiCharacters.push({
               id: newId,
               houseId: h.id,
@@ -712,7 +834,7 @@ export default function App() {
             setWood(Math.floor(currentWoodRef.current));
             setMeat(Math.floor(currentMeatRef.current));
             const fortHp = activeCardsRef.current.has('strategist') ? 150 : 100;
-            playerForts.push({ id: nextBuildingId++, x: pos.x, y: pos.y, hp: fortHp });
+            playerForts.push({ id: nextBuildingIdRef.current++, x: pos.x, y: pos.y, hp: fortHp });
             setFortCount(playerForts.length);
           } else {
             console.warn("Fort build pending: looking for space...");
@@ -734,7 +856,7 @@ export default function App() {
             setWood(Math.floor(currentWoodRef.current));
             setMeat(Math.floor(currentMeatRef.current));
             const marketHp = activeCardsRef.current.has('strategist') ? 300 : 200;
-            playerMarkets.push({ id: nextBuildingId++, x: pos.x, y: pos.y, hp: marketHp });
+            playerMarkets.push({ id: nextBuildingIdRef.current++, x: pos.x, y: pos.y, hp: marketHp });
             setMarketCount(playerMarkets.length);
           } else {
             console.warn("Market build pending: looking for space...");
@@ -752,7 +874,7 @@ export default function App() {
           buildSoldierRef.current--;
           currentMeatRef.current -= soldierCost;
           setMeat(Math.floor(currentMeatRef.current));
-          const newId = nextCharId++;
+          const newId = nextCharIdRef.current++;
           const soldierHp = activeCardsRef.current.has('armor') ? 40 : 20;
           playerSoldiers.push({
             id: newId,
@@ -864,7 +986,7 @@ export default function App() {
         } else if (mode === 'ATTACK_WORKERS') {
           let nearestTarget = null;
           let minDist = Infinity;
-          [...aiCharacters, ...aiHunters].forEach(target => {
+          [...aiCharacters, ...aiHuntersRef.current].forEach(target => {
             if (target && target.hp > 0 && !target.isResting) {
               const dist = Math.hypot(target.x - s.x, target.y - s.y);
               if (dist < minDist) {
@@ -987,7 +1109,7 @@ export default function App() {
 
         // Priority 2: Workers/Hunters
         if (!nearestTarget) {
-          const targets = [...playerCharacters, ...hunters];
+          const targets = [...playerCharacters, ...playerHuntersRef.current];
           targets.forEach(target => {
             if (target && target.hp > 0 && !target.isResting) {
               const dist = Math.hypot(target.x - s.x, target.y - s.y);
@@ -1053,8 +1175,8 @@ export default function App() {
 
       removeDead(playerCharacters);
       removeDead(aiCharacters);
-      removeDead(hunters);
-      removeDead(aiHunters);
+      removeDead(playerHuntersRef.current);
+      removeDead(aiHuntersRef.current);
       removeDead(playerSoldiers);
       removeDead(aiSoldiers);
       removeDead(playerHouses);
@@ -1673,11 +1795,11 @@ export default function App() {
         if (pos) {
           currentAiWoodRef.current -= aiHouseCost;
           setAiWood(currentAiWoodRef.current);
-          const houseId = nextBuildingId++;
+          const houseId = nextBuildingIdRef.current++;
           aiHouses.push({ id: houseId, x: pos.x, y: pos.y, hp: 100, spawnTimer: 3600 });
           setAiHouseCount(aiHouses.length);
           aiCharacters.push({
-            id: nextCharId++,
+            id: nextCharIdRef.current++,
             houseId: houseId,
             x: pos.x,
             y: pos.y,
@@ -1704,11 +1826,11 @@ export default function App() {
         if (pos) {
           currentAiWoodRef.current -= butcherShopCost;
           setAiWood(currentAiWoodRef.current);
-          const shopId = nextBuildingId++;
+          const shopId = nextBuildingIdRef.current++;
           aiButcherShops.push({ id: shopId, x: pos.x, y: pos.y, hp: 100 });
           setAiButcherShopCount(aiButcherShops.length);
           aiHunters.push({
-            id: nextCharId++,
+            id: nextCharIdRef.current++,
             shopId: shopId,
             x: pos.x,
             y: pos.y,
@@ -1736,7 +1858,7 @@ export default function App() {
           currentAiMeatRef.current -= aiFortCost;
           setAiWood(currentAiWoodRef.current);
           setAiMeat(currentAiMeatRef.current);
-          aiForts.push({ id: nextBuildingId++, x: pos.x, y: pos.y, hp: 100 });
+          aiForts.push({ id: nextBuildingIdRef.current++, x: pos.x, y: pos.y, hp: 100 });
           setAiFortCount(aiForts.length);
           aiFortTimer = 1800; // 30 seconds cooldown
         }
@@ -1748,7 +1870,7 @@ export default function App() {
           currentAiMeatRef.current -= 50;
           setAiMeat(currentAiMeatRef.current);
           aiSoldiers.push({ 
-            id: nextCharId++,
+            id: nextCharIdRef.current++,
             x: aiForts[0].x, 
             y: aiForts[0].y, 
             hp: 20,
@@ -1928,8 +2050,8 @@ export default function App() {
         canvas.height = canvas.clientHeight;
       }
 
-      // Clear screen (Infinite field color)
-      ctx.fillStyle = '#fef9c3'; 
+      // Clear screen (Solid tan background)
+      ctx.fillStyle = '#e1d4b7'; 
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.save();
@@ -1939,10 +2061,11 @@ export default function App() {
       ctx.scale(cameraRef.current.zoom, cameraRef.current.zoom);
       ctx.translate(-cameraRef.current.x, -cameraRef.current.y);
 
-      // Draw base world layer (infinite field matches outside naturally)
-      ctx.fillStyle = '#fef9c3';
+      // Draw base world layer (solid tan matches outside)
+      ctx.fillStyle = '#e1d4b7';
       ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
+      // Helper functions for drawing
       const drawHP = (x: number, y: number, current: number, max: number, color: string) => {
         ctx.fillStyle = '#d4d4d8';
         ctx.fillRect(x - 10, y + 10, 20, 3);
@@ -1953,15 +2076,22 @@ export default function App() {
         ctx.strokeRect(x - 10, y + 10, 20, 3);
       };
 
+      const drawShadow = (x: number, y: number, w: number, h: number) => {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(1, 0.5);
+          ctx.fillStyle = 'rgba(0,0,0,0.1)';
+          ctx.beginPath();
+          ctx.arc(0, 0, w, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+      };
+
       const drawPixelHouse = (x: number, y: number, isAi: boolean) => {
         if (houseImageRef.current && houseImageRef.current.complete) {
-          // Draw the custom house image
-          // Center the image on (x, y)
           const width = 32;
           const height = 32;
           ctx.drawImage(houseImageRef.current, x - width / 2, y - height / 2, width, height);
-          
-          // Add a small indicator for AI houses if needed, or just rely on the image
           if (isAi) {
             ctx.strokeStyle = '#ef4444';
             ctx.lineWidth = 2;
@@ -1969,15 +2099,21 @@ export default function App() {
           }
           return;
         }
-        
-        // Fallback if image is not loaded
         ctx.fillStyle = isAi ? '#991b1b' : '#d9a347';
         ctx.fillRect(x - 16, y - 16, 32, 32);
       };
 
+      // Draw Map Decorations (Grass, Rocks) - REMOVED for clean look
+      /*
+      decorationsRef.current.forEach(d => {
+         ...
+      });
+      */
+
       // Draw Player Houses
       playerHouses.forEach(h => {
         if (!h) return;
+        drawShadow(h.x, h.y + 10, 20, 10);
         drawPixelHouse(h.x, h.y, false);
         drawHP(h.x, h.y + 15, h.hp, 100, '#16a34a');
       });
@@ -1997,6 +2133,7 @@ export default function App() {
       
       [...visibleTrees].sort((a, b) => a.y - b.y).forEach((t) => {
         if (t.state === 'GROWN' && (t.wood > 0 || t.owner === 'BORDER')) {
+          drawShadow(t.x, t.y + 8, 12, 6);
           const isBorder = t.owner === 'BORDER';
           const img = isBorder ? borderTreeImageRef.current : grownTreeImageRef.current;
           if (img && img.complete) {
@@ -2008,6 +2145,7 @@ export default function App() {
             ctx.fillText(isBorder ? 'B' : 'a', t.x, t.y);
           }
         } else if (t.state === 'PLANTED') {
+          drawShadow(t.x, t.y + 4, 6, 3);
           if (plantedTreeImageRef.current && plantedTreeImageRef.current.complete) {
             const width = 24;
             const height = 24;
@@ -2059,6 +2197,7 @@ export default function App() {
       if (currentPhase > 4) {
         aiHouses.forEach(h => {
           if (!h) return;
+          drawShadow(h.x, h.y + 10, 20, 10);
           drawPixelHouse(h.x, h.y, true);
           drawHP(h.x, h.y + 15, h.hp, 100, '#ef4444');
         });
@@ -2097,6 +2236,7 @@ export default function App() {
       // Draw Butcher Shops
       butcherShops.forEach(h => {
         if (!h) return;
+        drawShadow(h.x, h.y + 10, 24, 12);
         if (carniceriaImageRef.current && carniceriaImageRef.current.complete) {
           const width = 36;
           const height = 36;
@@ -2134,7 +2274,7 @@ export default function App() {
       }
 
       // Draw Hunters
-      hunters.forEach(h => {
+      playerHuntersRef.current.forEach(h => {
         if (!h) return;
         const angle = h.id * 2.39996;
         const r = 35 + (h.id % 3) * 5;
@@ -2163,7 +2303,7 @@ export default function App() {
 
       // Draw AI Hunters
       if (currentPhase > 4) {
-        aiHunters.forEach(h => {
+        aiHuntersRef.current.forEach(h => {
           if (!h) return;
           const angle = h.id * 2.39996;
           const r = 35 + (h.id % 3) * 5;
@@ -2186,6 +2326,7 @@ export default function App() {
       // Draw Forts ('F' or fuerte.png)
       playerForts.forEach(f => {
         if (!f) return;
+        drawShadow(f.x, f.y + 15, 30, 15);
         if (fortImageRef.current && fortImageRef.current.complete) {
           const width = 48; 
           const height = 48;
@@ -2342,7 +2483,11 @@ export default function App() {
     };
 
     animationId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animationId);
+    return () => {
+      cancelAnimationFrame(animationId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (backgroundInterval) clearInterval(backgroundInterval);
+    };
   }, [gameState, currentPhase]);
 
   if (gameState === 'TITLE') {
@@ -2365,8 +2510,8 @@ export default function App() {
           <div className="flex flex-col items-center mb-24 mt-12 relative">
             <span className="absolute -left-12 -top-4 text-4xl transform -rotate-12 opacity-80">🪓</span>
             <div className="flex flex-col items-center gap-1">
-               <h1 className="text-5xl font-black text-white drop-shadow-[0_4px_0_theme(colors.amber.700)] italic tracking-tighter uppercase leading-none">WOOD</h1>
-               <h1 className="text-5xl font-black text-amber-500 drop-shadow-[0_4px_0_theme(colors.amber.800)] italic tracking-tighter uppercase leading-none">GATHERER</h1>
+               <h1 className="text-4xl md:text-5xl font-black text-white drop-shadow-[0_4px_0_theme(colors.amber.700)] italic tracking-tighter uppercase leading-none">WOOD</h1>
+               <h1 className="text-4xl md:text-5xl font-black text-amber-500 drop-shadow-[0_4px_0_theme(colors.amber.800)] italic tracking-tighter uppercase leading-none">GATHERER</h1>
             </div>
           </div>
           
@@ -2435,11 +2580,11 @@ export default function App() {
   if (gameState === 'LOBBY') {
     return (
       <div 
-        className="bg-stone-950 flex font-sans overflow-hidden h-screen w-screen"
+        className="bg-stone-950 flex flex-col md:flex-row font-sans overflow-y-auto md:overflow-hidden h-screen w-screen"
         style={{ margin: 0, padding: 0 }}
       >
         {/* Left: Players List */}
-        <div className="w-1/4 border-r-2 border-stone-800 flex flex-col bg-stone-900/50">
+        <div className="w-full md:w-1/4 border-b-2 md:border-b-0 md:border-r-2 border-stone-800 flex flex-col bg-stone-900/50 min-h-[300px] shrink-0">
           <div className="p-6 border-b-2 border-stone-800">
             <h2 className="text-xl font-black text-amber-500 italic tracking-tighter uppercase mb-1">Jugadores Online</h2>
             <p className="text-[10px] text-stone-500 font-bold tracking-widest">SÉ EL HOST DE LA PARTIDA</p>
@@ -2477,7 +2622,7 @@ export default function App() {
         </div>
 
         {/* Center: Hero/Room Area */}
-        <div className="flex-1 flex flex-col items-center justify-center p-12 relative">
+        <div className="flex-1 w-full flex flex-col items-center justify-center p-8 md:p-12 relative min-h-[400px] shrink-0">
            <div className="absolute top-12 text-center">
               <h1 className="text-6xl font-black text-white/10 italic tracking-tighter uppercase select-none">MULTIPLAYER</h1>
            </div>
@@ -2495,7 +2640,7 @@ export default function App() {
         </div>
 
         {/* Right: Global Chat */}
-        <div className="w-1/4 border-l-2 border-stone-800 flex flex-col bg-stone-900/80">
+        <div className="w-full md:w-1/4 border-t-2 md:border-t-0 md:border-l-2 border-stone-800 flex flex-col bg-stone-900/80 min-h-[400px] shrink-0">
           <div className="p-6 border-b-2 border-stone-800">
             <h2 className="text-xl font-black text-white italic tracking-tighter uppercase mb-1">Chat Global</h2>
             <div className="flex items-center gap-2">
@@ -2545,88 +2690,119 @@ export default function App() {
   }
 
   if (gameState === 'MAP') {
+    const phases = [
+      { id: 1, name: 'La Tala',     desc: 'Recolección de madera básica', pos: { top: '65%', left: '20%' }, iconPos: '0% 0%'   },
+      { id: 2, name: 'La Aldea',    desc: 'Construye casas y crece',       pos: { top: '45%', left: '35%' }, iconPos: '25% 0%'  },
+      { id: 3, name: 'La Caza',     desc: 'Caza animales para carne',      pos: { top: '25%', left: '30%' }, iconPos: '50% 0%'  },
+      { id: 4, name: 'El Comercio', desc: 'Intercambia y mejora',          pos: { top: '40%', left: '65%' }, iconPos: '75% 0%'  },
+      { id: 5, name: 'El Fuerte',   desc: 'Defensa y entrenamiento',       pos: { top: '20%', left: '80%' }, iconPos: '100% 0%' },
+    ];
+
     return (
-      <div 
-        className="bg-emerald-900 flex flex-col items-center justify-center p-4 font-sans pattern-isometric relative"
-        style={{ minHeight: '100dvh', width: '100vw', margin: 0, padding: 0 }}
+      <div
+        className="relative font-sans overflow-hidden"
+        style={{ height: '100dvh', width: '100vw', margin: 0, padding: 0 }}
       >
-        <button 
+        {/* World map background fills the full viewport */}
+        <div
+          className="absolute inset-0 bg-no-repeat bg-cover bg-center"
+          style={{ backgroundImage: `url(${import.meta.env.BASE_URL}world_map.png)` }}
+        />
+        
+        {/* Overlay Gradient for depth */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
+
+        <button
           onClick={() => setGameState('TITLE')}
-          className="absolute top-8 left-8 px-6 py-3 bg-stone-800/80 hover:bg-stone-700 text-stone-200 font-black rounded-xl border-2 border-stone-600/50 backdrop-blur-sm transition-all"
+          className="absolute top-4 left-4 z-30 px-4 py-2 bg-stone-900/90 hover:bg-stone-800 text-stone-200 font-black rounded-xl border-2 border-amber-600/30 backdrop-blur-md transition-all flex items-center gap-2 group text-sm md:text-base md:px-6 md:py-3 md:top-8 md:left-8"
         >
-          ← Volver al Menú
+          <span className="group-hover:-translate-x-1 transition-transform">←</span>
+          <span>MENÚ PRINCIPAL</span>
         </button>
 
-        <h1 className="text-5xl font-black text-white mb-12 drop-shadow-lg italic tracking-tight uppercase">MAPA DE MUNDO</h1>
-        
-        <div className="flex gap-8 items-center bg-emerald-800/80 p-12 rounded-3xl shadow-2xl backdrop-blur-md border border-emerald-700/50">
-          {/* Phase 1 */}
-          <div className="flex flex-col items-center gap-3">
-            <button 
-              onClick={() => { setCurrentPhase(1); setGameState('PLAYING'); }}
-              className="w-24 h-24 rounded-full bg-amber-400 border-4 border-amber-200 flex items-center justify-center text-3xl font-black text-amber-900 shadow-[0_10px_0_theme(colors.amber.600)] hover:translate-y-2 hover:shadow-[0_2px_0_theme(colors.amber.600)] transition-all cursor-pointer"
-            >
-              1
-            </button>
-            <span className="text-emerald-100 font-bold tracking-wide">La Tala</span>
-          </div>
-
-          <div className="w-16 h-4 border-y-4 border-dashed border-emerald-700"></div>
-
-          {/* Phase 2 */}
-          <div className={`flex flex-col items-center gap-3 ${maxUnlockedPhase < 2 ? 'opacity-50' : ''}`}>
-            <button 
-              disabled={maxUnlockedPhase < 2}
-              onClick={() => { setCurrentPhase(2); setGameState('PLAYING'); }}
-              className={`w-24 h-24 rounded-full border-4 flex items-center justify-center text-3xl font-black transition-all ${maxUnlockedPhase >= 2 ? 'cursor-pointer bg-sky-400 border-sky-200 text-sky-900 shadow-[0_10px_0_theme(colors.sky.600)] hover:translate-y-2 hover:shadow-[0_2px_0_theme(colors.sky.600)]' : 'cursor-not-allowed bg-slate-400 border-slate-300 text-slate-800 shadow-[0_10px_0_theme(colors.slate.600)]'}`}
-            >
-              2
-            </button>
-            <span className="text-emerald-100 font-bold tracking-wide">La Aldea</span>
-          </div>
-
-          <div className="w-16 h-4 border-y-4 border-dashed border-emerald-700"></div>
-
-          {/* Phase 3 */}
-          <div className={`flex flex-col items-center gap-3 ${maxUnlockedPhase < 3 ? 'opacity-50' : ''}`}>
-            <button 
-              disabled={maxUnlockedPhase < 3}
-              onClick={() => { setCurrentPhase(3); setGameState('PLAYING'); }}
-              className={`w-24 h-24 rounded-full border-4 flex items-center justify-center text-3xl font-black transition-all ${maxUnlockedPhase >= 3 ? 'cursor-pointer bg-red-400 border-red-200 text-red-900 shadow-[0_10px_0_theme(colors.red.600)] hover:translate-y-2 hover:shadow-[0_2px_0_theme(colors.red.600)]' : 'cursor-not-allowed bg-slate-400 border-slate-300 text-slate-800 shadow-[0_10px_0_theme(colors.slate.600)]'}`}
-            >
-              3
-            </button>
-            <span className="text-emerald-100 font-bold tracking-wide">La Caza</span>
-          </div>
-
-          <div className="w-16 h-4 border-y-4 border-dashed border-emerald-700"></div>
-
-          {/* Phase 4 */}
-          <div className={`flex flex-col items-center gap-3 ${maxUnlockedPhase < 4 ? 'opacity-50' : ''}`}>
-            <button 
-              disabled={maxUnlockedPhase < 4}
-              onClick={() => { setCurrentPhase(4); setGameState('PLAYING'); }}
-              className={`w-24 h-24 rounded-full border-4 flex items-center justify-center text-3xl font-black transition-all ${maxUnlockedPhase >= 4 ? 'cursor-pointer bg-yellow-400 border-yellow-200 text-yellow-900 shadow-[0_10px_0_theme(colors.yellow.600)] hover:translate-y-2 hover:shadow-[0_2px_0_theme(colors.yellow.600)]' : 'cursor-not-allowed bg-slate-400 border-slate-300 text-slate-800 shadow-[0_10px_0_theme(colors.slate.600)]'}`}
-            >
-              4
-            </button>
-            <span className="text-emerald-100 font-bold tracking-wide">El Comercio</span>
-          </div>
-
-          <div className="w-16 h-4 border-y-4 border-dashed border-emerald-700"></div>
-
-          {/* Phase 5 */}
-          <div className={`flex flex-col items-center gap-3 ${maxUnlockedPhase < 5 ? 'opacity-50' : ''}`}>
-            <button 
-              disabled={maxUnlockedPhase < 5}
-              onClick={() => { setCurrentPhase(5); setGameState('PLAYING'); }}
-              className={`w-24 h-24 rounded-full border-4 flex items-center justify-center text-3xl font-black transition-all ${maxUnlockedPhase >= 5 ? 'cursor-pointer bg-indigo-400 border-indigo-200 text-indigo-100 shadow-[0_10px_0_theme(colors.indigo.600)] hover:translate-y-2 hover:shadow-[0_2px_0_theme(colors.indigo.600)]' : 'cursor-not-allowed bg-slate-400 border-slate-300 text-slate-800 shadow-[0_10px_0_theme(colors.slate.600)]'}`}
-            >
-              5
-            </button>
-            <span className="text-emerald-100 font-bold tracking-wide">{maxUnlockedPhase >= 5 ? 'El Fuerte' : 'Próximamente'}</span>
-          </div>
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 text-center md:top-8">
+          <h1 className="text-2xl md:text-5xl font-black text-white italic tracking-tighter uppercase drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] whitespace-nowrap">
+            Expansión Territorial
+          </h1>
+          <div className="h-1 w-20 md:w-32 bg-amber-500 mx-auto mt-1 rounded-full shadow-[0_0_15px_rgba(245,158,11,0.5)]" />
         </div>
+
+        {/* SVG connectors between pins - rendered over full viewport */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-20">
+          {phases.slice(0, -1).map((p, i) => {
+            const next = phases[i + 1];
+            const isUnlocked = maxUnlockedPhase > p.id;
+            return (
+              <line
+                key={i}
+                x1={p.pos.left} y1={p.pos.top}
+                x2={next.pos.left} y2={next.pos.top}
+                stroke={isUnlocked ? '#fbbf24' : '#555'}
+                strokeWidth="3"
+                strokeDasharray="8,8"
+                style={{ transition: 'stroke 0.5s ease' }}
+              />
+            );
+          })}
+        </svg>
+
+        {/* Phase pins overlaid directly on the background */}
+        {phases.map((p) => {
+          const isUnlocked = maxUnlockedPhase >= p.id;
+          const isNext = maxUnlockedPhase === p.id;
+          return (
+            <div
+              key={p.id}
+              className="absolute transform -translate-x-1/2 -translate-y-1/2 group z-30"
+              style={{ top: p.pos.top, left: p.pos.left }}
+            >
+              <button
+                disabled={!isUnlocked}
+                onClick={() => { setCurrentPhase(p.id); setGameState('PLAYING'); }}
+                className={`
+                  relative w-14 h-14 md:w-20 md:h-20 rounded-2xl border-4 transition-all duration-300
+                  flex items-center justify-center
+                  ${isUnlocked
+                    ? 'bg-stone-900/90 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.4)] hover:scale-110 hover:-translate-y-2 cursor-pointer active:scale-95'
+                    : 'bg-stone-950/90 border-stone-800 grayscale cursor-not-allowed opacity-80'
+                  }
+                `}
+              >
+                <div
+                  className="w-10 h-10 md:w-14 md:h-14 bg-no-repeat bg-contain"
+                  style={{
+                    backgroundImage: `url(${import.meta.env.BASE_URL}phase_icons.png)`,
+                    backgroundPosition: p.iconPos,
+                    backgroundSize: '500% 100%'
+                  }}
+                />
+                <div className="absolute bottom-0 right-0 bg-amber-600 text-white text-[8px] md:text-[10px] font-black px-1.5 py-0.5 rounded-tl-md italic">
+                  F{p.id}
+                </div>
+                {!isUnlocked && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-xl">
+                    <span className="text-base md:text-xl">🔒</span>
+                  </div>
+                )}
+              </button>
+
+              {isNext && (
+                <div className="absolute -inset-2 border-2 border-amber-400 rounded-2xl animate-ping opacity-50 pointer-events-none" />
+              )}
+
+              {/* Hover tooltip — desktop only */}
+              <div className="hidden md:block absolute top-full mt-3 left-1/2 -translate-x-1/2 w-48 bg-stone-900/95 border border-amber-600/30 p-3 rounded-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none backdrop-blur-md shadow-2xl translate-y-2 group-hover:translate-y-0 z-50">
+                <h3 className="text-amber-500 font-black text-xs uppercase italic tracking-widest mb-1">{p.name}</h3>
+                <p className="text-stone-300 text-[10px] font-bold leading-tight">{p.desc}</p>
+              </div>
+
+              {/* Mobile label under pin */}
+              <div className="md:hidden mt-1 text-center pointer-events-none">
+                <span className="text-[9px] font-black text-white drop-shadow uppercase bg-black/40 rounded px-1">{p.name}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -2638,31 +2814,217 @@ export default function App() {
     >
       
       {/* Top Game View */}
-      <div className="flex-1 relative flex overflow-hidden bg-[#fef9c3] min-h-0">
+      <div className="flex-1 relative flex overflow-hidden bg-[#e1d4b7] min-h-0">
         <canvas
           ref={canvasRef}
           width={1}
           height={1}
           onMouseDown={(e) => {
+            if (isAdminMode) {
+              const rect = canvasRef.current?.getBoundingClientRect();
+              if (rect) {
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                // Convert screen coords to world coords
+                const wx = cameraRef.current.x + (mouseX - rect.width / 2) / cameraRef.current.zoom;
+                const wy = cameraRef.current.y + (mouseY - rect.height / 2) / cameraRef.current.zoom;
+
+                if (editorTool === 'DELETE') {
+                  // Find closest thing and remove it
+                  const findAndRemove = (arrRef: React.MutableRefObject<any[]>, threshold = 32) => {
+                    const idx = arrRef.current.findIndex(obj => Math.hypot(obj.x - wx, obj.y - wy) < threshold);
+                    if (idx !== -1) {
+                      arrRef.current.splice(idx, 1);
+                      return true;
+                    }
+                    return false;
+                  };
+                  
+                  if (findAndRemove(treesRef)) {}
+                  else if (findAndRemove(playerCharactersRef)) {}
+                  else if (findAndRemove(aiCharactersRef)) {}
+                  else if (findAndRemove(playerHousesRef, 64)) {}
+                  else if (findAndRemove(aiHousesRef, 64)) {}
+                  else if (findAndRemove(butcherShopsRef, 48)) {}
+                  else if (findAndRemove(aiButcherShopsRef, 48)) {}
+                  else if (findAndRemove(playerFortsRef, 80)) {}
+                  else if (findAndRemove(aiFortsRef, 80)) {}
+                  else if (findAndRemove(playerMarketsRef, 60)) {}
+                  else if (findAndRemove(wildBoarsRef)) {}
+                  else if (findAndRemove(playerSoldiersRef)) {}
+                  else if (findAndRemove(aiSoldiersRef)) {}
+                  
+                  // Update UI counts after deletion
+                  setPlayerHouseCount(playerHousesRef.current.length);
+                  setButcherShopCount(butcherShopsRef.current.length);
+                  setFortCount(playerFortsRef.current.length);
+                  setSoldierCount(playerSoldiersRef.current.length);
+                  setMarketCount(playerMarketsRef.current.length);
+                  setAiHouseCount(aiHousesRef.current.length);
+                  setAiButcherShopCount(aiButcherShopsRef.current.length);
+                  setAiFortCount(aiFortsRef.current.length);
+                  setAiSoldierCount(aiSoldiersRef.current.length);
+                } else {
+                  // Placement Logic
+                  const id = nextBuildingIdRef.current++; // Using building ID for generic objects too
+                  const charId = nextCharIdRef.current++;
+                  
+                  switch(editorTool) {
+                    case 'TREE_PLAYER': treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 3, state: 'GROWN', owner: 'PLAYER' }); break;
+                    case 'TREE_AI': treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 3, state: 'GROWN', owner: 'AI' }); break;
+                    case 'TREE_BORDER': treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 0, state: 'GROWN', owner: 'BORDER' }); break;
+                    case 'WORKER_PLAYER': 
+                      playerCharactersRef.current.push({
+                        id: charId, x: wx, y: wy, state: 'IDLE', target: null, onReach: 'IDLE', timer: 0, carrying: null,
+                        energy: 100, isExhausted: false, isResting: false, hp: 10, currentMode: 'GATHER'
+                      });
+                      setWorkers(prev => [...prev, { id: charId, name: NAMES[prev.length % NAMES.length], mode: 'GATHER', role: 'WOOD' }]);
+                      break;
+                    case 'WORKER_AI':
+                      aiCharactersRef.current.push({
+                        id: charId, x: wx, y: wy, state: 'IDLE', target: null, onReach: 'IDLE', timer: 0, carrying: null,
+                        energy: 100, isExhausted: false, isResting: false, hp: 10, currentMode: 'GATHER'
+                      });
+                      break;
+                    case 'BOAR': wildBoarsRef.current.push({ id: id, x: wx, y: wy, hp: 10 }); break;
+                    case 'HOUSE_PLAYER': playerHousesRef.current.push({ id: id, x: wx, y: wy, hp: 100, spawnTimer: 3600 }); setPlayerHouseCount(playerHousesRef.current.length); break;
+                    case 'HOUSE_AI': aiHousesRef.current.push({ id: id, x: wx, y: wy, hp: 100, spawnTimer: 3600 }); setAiHouseCount(aiHousesRef.current.length); break;
+                    case 'FORT_PLAYER': playerFortsRef.current.push({ id: id, x: wx, y: wy, hp: 100 }); setFortCount(playerFortsRef.current.length); break;
+                    case 'SOLDIER_PLAYER': 
+                      playerSoldiersRef.current.push({
+                        id: charId, x: wx, y: wy, hp: 20, maxHp: 20, state: 'IDLE', target: null, onReach: 'IDLE', timer: 0, energy: 100, isExhausted: false, isResting: false, currentMode: 'SOLDIER'
+                      });
+                      setWorkers(prev => [...prev, { id: charId, name: NAMES[prev.length % NAMES.length], mode: 'IDLE', role: 'SOLDIER', currentMode: 'SOLDIER' }]);
+                      setSoldierCount(playerSoldiersRef.current.length);
+                      break;
+                  }
+                }
+              }
+              return; // Don't drag while in editor if we clicked a tool action
+            }
             isDraggingRef.current = true;
             lastMousePosRef.current = { x: e.clientX, y: e.clientY };
           }}
           onMouseMove={(e) => {
             if (!isDraggingRef.current) return;
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (!rect) return;
+
             const dx = e.clientX - lastMousePosRef.current.x;
             const dy = e.clientY - lastMousePosRef.current.y;
             targetCameraRef.current.x -= dx / targetCameraRef.current.zoom;
             targetCameraRef.current.y -= dy / targetCameraRef.current.zoom;
             
             // Constrain camera center to keep the forest as a visual edge
-            const BORDER = 1200;
-            targetCameraRef.current.x = Math.max(-BORDER, Math.min(WORLD_WIDTH + BORDER, targetCameraRef.current.x));
-            targetCameraRef.current.y = Math.max(-BORDER, Math.min(WORLD_HEIGHT + BORDER, targetCameraRef.current.y));
+            const margin = currentPhase === 1 ? 400 : 1200;
+            const safeMargin = margin - 300; // Tighter margin to keep forest always visible
+            
+            const viewW = rect.width / targetCameraRef.current.zoom;
+            const viewH = rect.height / targetCameraRef.current.zoom;
+
+            // In Phase 1, center is fixed, very little movement allowed
+            if (currentPhase === 1) {
+              const maxDist = 150; // Max allowed camera offset from center
+              const dx_clamped = targetCameraRef.current.x - PHASE1_CENTER_X;
+              const dy_clamped = targetCameraRef.current.y - PHASE1_CENTER_Y;
+              const dist = Math.hypot(dx_clamped, dy_clamped);
+              if (dist > maxDist) {
+                targetCameraRef.current.x = PHASE1_CENTER_X + (dx_clamped / dist) * maxDist;
+                targetCameraRef.current.y = PHASE1_CENTER_Y + (dy_clamped / dist) * maxDist;
+              }
+            } else {
+              const minX = -safeMargin + viewW / 2;
+              const maxX = WORLD_WIDTH + safeMargin - viewW / 2;
+              const minY = -safeMargin + viewH / 2;
+              const maxY = WORLD_HEIGHT + safeMargin - viewH / 2;
+
+              targetCameraRef.current.x = Math.max(minX, Math.min(maxX, targetCameraRef.current.x));
+              targetCameraRef.current.y = Math.max(minY, Math.min(maxY, targetCameraRef.current.y));
+            }
 
             lastMousePosRef.current = { x: e.clientX, y: e.clientY };
           }}
           onMouseUp={() => isDraggingRef.current = false}
           onMouseLeave={() => isDraggingRef.current = false}
+          onTouchStart={(e) => {
+            if (e.touches.length === 1) {
+              isDraggingRef.current = true;
+              lastMousePosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else if (e.touches.length === 2) {
+              const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+              );
+              initialPinchDistRef.current = dist;
+              initialZoomRef.current = targetCameraRef.current.zoom;
+            }
+          }}
+          onTouchMove={(e) => {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (!rect) return;
+
+            if (e.touches.length === 1 && isDraggingRef.current) {
+              const dx = e.touches[0].clientX - lastMousePosRef.current.x;
+              const dy = e.touches[0].clientY - lastMousePosRef.current.y;
+              targetCameraRef.current.x -= dx / targetCameraRef.current.zoom;
+              targetCameraRef.current.y -= dy / targetCameraRef.current.zoom;
+              
+              const margin = currentPhase === 1 ? 400 : 1200;
+              const safeMargin = margin - 300;
+              const viewW = rect.width / targetCameraRef.current.zoom;
+              const viewH = rect.height / targetCameraRef.current.zoom;
+
+              if (currentPhase === 1) {
+                const maxDist = 150;
+                const dx_clamped = targetCameraRef.current.x - PHASE1_CENTER_X;
+                const dy_clamped = targetCameraRef.current.y - PHASE1_CENTER_Y;
+                const dist = Math.hypot(dx_clamped, dy_clamped);
+                if (dist > maxDist) {
+                  targetCameraRef.current.x = PHASE1_CENTER_X + (dx_clamped / dist) * maxDist;
+                  targetCameraRef.current.y = PHASE1_CENTER_Y + (dy_clamped / dist) * maxDist;
+                }
+              } else {
+                const minX = -safeMargin + viewW / 2;
+                const maxX = WORLD_WIDTH + safeMargin - viewW / 2;
+                const minY = -safeMargin + viewH / 2;
+                const maxY = WORLD_HEIGHT + safeMargin - viewH / 2;
+
+                targetCameraRef.current.x = Math.max(minX, Math.min(maxX, targetCameraRef.current.x));
+                targetCameraRef.current.y = Math.max(minY, Math.min(maxY, targetCameraRef.current.y));
+              }
+
+              lastMousePosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else if (e.touches.length === 2 && initialPinchDistRef.current !== null && initialZoomRef.current !== null) {
+              const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+              );
+              const scale = dist / initialPinchDistRef.current;
+              let newZoom = initialZoomRef.current * scale;
+              
+              const margin = currentPhase === 1 ? 400 : 1200;
+              const safeMargin = margin - 300;
+              const minZoomX = rect.width / (WORLD_WIDTH + safeMargin * 2);
+              const minZoomY = rect.height / (WORLD_HEIGHT + safeMargin * 2);
+              const minZoom = Math.max(minZoomX, minZoomY);
+              
+              newZoom = Math.min(Math.max(minZoom, newZoom), 3);
+              targetCameraRef.current.zoom = newZoom;
+            }
+          }}
+          onTouchEnd={(e) => {
+            if (e.touches.length < 2) {
+              initialPinchDistRef.current = null;
+              initialZoomRef.current = null;
+            }
+            if (e.touches.length === 0) {
+              isDraggingRef.current = false;
+            } else if (e.touches.length === 1) {
+              // resume panning mode from the remaining finger
+              lastMousePosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+          }}
           onWheel={(e) => {
             const rect = canvasRef.current?.getBoundingClientRect();
             if (!rect) return;
@@ -2672,11 +3034,11 @@ export default function App() {
             const oldZoom = targetCameraRef.current.zoom;
             const zoomAmount = e.deltaY * -0.0015;
 
-            // Compute minimum zoom so the viewport never exceeds the tree-covered area
-            // Trees extend ~1200px beyond world boundary in each direction
-            const safeExtent = 1200;
-            const minZoomX = rect.width / (WORLD_WIDTH + safeExtent * 2);
-            const minZoomY = rect.height / (WORLD_HEIGHT + safeExtent * 2);
+            const margin = currentPhase === 1 ? 400 : 1200;
+            const safeMargin = margin - 300;
+
+            const minZoomX = rect.width / (WORLD_WIDTH + safeMargin * 2);
+            const minZoomY = rect.height / (WORLD_HEIGHT + safeMargin * 2);
             const minZoom = Math.max(minZoomX, minZoomY);
 
             const newZoom = Math.min(Math.max(minZoom, oldZoom + zoomAmount), 3);
@@ -2684,19 +3046,42 @@ export default function App() {
             const worldX = targetCameraRef.current.x + (mouseX - rect.width / 2) / oldZoom;
             const worldY = targetCameraRef.current.y + (mouseY - rect.height / 2) / oldZoom;
             
-            targetCameraRef.current.x = worldX - (mouseX - rect.width / 2) / newZoom;
-            targetCameraRef.current.y = worldY - (mouseY - rect.height / 2) / newZoom;
+            let tx = worldX - (mouseX - rect.width / 2) / newZoom;
+            let ty = worldY - (mouseY - rect.height / 2) / newZoom;
             
             // Constrain camera center to keep the forest as a visual edge
-            const BORDER = 1200;
-            targetCameraRef.current.x = Math.max(-BORDER, Math.min(WORLD_WIDTH + BORDER, targetCameraRef.current.x));
-            targetCameraRef.current.y = Math.max(-BORDER, Math.min(WORLD_HEIGHT + BORDER, targetCameraRef.current.y));
+            const viewW = rect.width / newZoom;
+            const viewH = rect.height / newZoom;
+
+            if (currentPhase === 1) {
+              const maxDist = 150;
+              const dx_clamped = tx - PHASE1_CENTER_X;
+              const dy_clamped = ty - PHASE1_CENTER_Y;
+              const dist = Math.hypot(dx_clamped, dy_clamped);
+              if (dist > maxDist) {
+                targetCameraRef.current.x = PHASE1_CENTER_X + (dx_clamped / dist) * maxDist;
+                targetCameraRef.current.y = PHASE1_CENTER_Y + (dy_clamped / dist) * maxDist;
+              } else {
+                targetCameraRef.current.x = tx;
+                targetCameraRef.current.y = ty;
+              }
+            } else {
+              const minX = -safeMargin + viewW / 2;
+              const maxX = WORLD_WIDTH + safeMargin - viewW / 2;
+              const minY = -safeMargin + viewH / 2;
+              const maxY = WORLD_HEIGHT + safeMargin - viewH / 2;
+
+              targetCameraRef.current.x = Math.max(minX, Math.min(maxX, tx));
+              targetCameraRef.current.y = Math.max(minY, Math.min(maxY, ty));
+            }
             
             targetCameraRef.current.zoom = newZoom;
           }}
-          className="w-full h-full bg-[#fef9c3] cursor-grab active:cursor-grabbing border-b-4 border-amber-700"
+          className={`w-full h-full bg-[#e1d4b7] ${isAdminMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'} border-b-4 border-amber-700`}
           style={{ display: 'block', touchAction: 'none' }}
         />
+
+
         
         {/* Tutorial Overlay */}
         {showTutorial && PHASE_TUTORIAL[currentPhase] && (
@@ -2919,10 +3304,10 @@ export default function App() {
       </div>
 
       {/* Bottom HUD */}
-      <div className="h-56 min-h-[224px] shrink-0 bg-stone-800 border-t-4 border-amber-700 flex text-stone-200">
+      <div className="md:h-56 shrink-0 bg-stone-800 border-t-4 border-amber-700 flex flex-col md:flex-row text-stone-200 overflow-y-auto md:overflow-hidden max-h-[50vh] md:max-h-none">
         
         {/* Left Column: Resources & Info */}
-        <div className="w-1/4 p-4 border-r-2 border-stone-700 flex flex-col overflow-y-auto">
+        <div className="w-full md:w-1/4 p-4 md:border-r-2 border-b-2 md:border-b-0 border-stone-700 flex flex-col overflow-y-auto touch-pan-y shrink-0 md:shrink">
           <h2 className="text-xl font-black text-amber-500 mb-2 tracking-wider">
             {currentPhase === 1 ? 'FASE 1: LA TALA' : currentPhase === 2 ? 'FASE 2: LA ALDEA' : currentPhase === 3 ? 'FASE 3: LA CAZA' : currentPhase === 4 ? 'FASE 4: EL COMERCIO' : 'FASE 5: EL FUERTE'}
           </h2>
@@ -2962,8 +3347,8 @@ export default function App() {
         </div>
 
         {/* Middle Column: Workers Control */}
-        <div className="flex-1 p-4 border-r-2 border-stone-700 flex flex-col overflow-hidden">
-          <div className="flex justify-between items-center mb-2 shrink-0">
+        <div className="flex-1 p-4 md:border-r-2 border-b-2 md:border-b-0 border-stone-700 flex flex-col overflow-y-auto touch-pan-y md:overflow-hidden min-h-[200px] md:min-h-0 shrink-0 md:shrink">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 shrink-0 gap-2">
             <h3 className="text-xs font-bold text-amber-500 uppercase tracking-widest">Trabajadores ({workers.length})</h3>
             <div className="flex gap-1">
               <button title="Todos: Atacar Soldados" onClick={() => setWorkers(prev => prev.map(w => w.role === 'SOLDIER' ? { ...w, mode: 'ATTACK_SOLDIERS' } : w))} className="px-2 py-1 text-[10px] font-bold bg-blue-900 border border-blue-700 hover:bg-blue-800 rounded">Sold.</button>
@@ -2973,7 +3358,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto pr-2 flex flex-col gap-3">
+          <div className="flex-1 overflow-y-auto touch-pan-y pr-2 flex flex-col gap-3">
             {['WOOD', 'MEAT', 'SOLDIER'].map(role => {
               const groupWorkers = workers.filter(w => w.role === role);
               if (groupWorkers.length === 0) return null;
@@ -3024,7 +3409,7 @@ export default function App() {
         </div>
 
         {/* Right Column: Build & Settings */}
-        <div className="w-1/4 p-4 flex flex-col overflow-y-auto">
+        <div className="w-full md:w-1/4 p-4 flex flex-col overflow-y-auto touch-pan-y shrink-0 md:shrink">
           <h3 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2 shrink-0">Construcción</h3>
           <div className="grid grid-cols-2 gap-1 flex-1">
             <button 
