@@ -3528,6 +3528,7 @@ export default function App() {
                 {currentPhase >= 4 && <span className="text-yellow-400 col-span-2">💰 Oro: {Math.floor(gold)}</span>}
                 <span className="text-slate-400">Fuertes: {fortCount}</span>
                 <span className="text-blue-400">Soldados: {soldierCount}</span>
+                {currentPhase >= 5 && <span className="text-stone-400">Torres: {towerCount}</span>}
               </div>
             </div>
 
@@ -3619,18 +3620,6 @@ export default function App() {
         <div className="w-full md:w-1/4 p-4 flex flex-col overflow-y-auto touch-pan-y shrink-0 md:shrink">
           <h3 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2 shrink-0">Construcción</h3>
           <div className="flex-1 flex flex-col md:flex-row gap-2 p-2 min-h-0 bg-stone-900 overflow-y-auto">
-            {/* Resources HUD (Simplified) */}
-            <div className="flex flex-col gap-1 p-2 bg-stone-800 rounded-lg border border-stone-700 md:w-48 shrink-0">
-              <div className="grid grid-cols-2 gap-x-2 text-[10px] md:text-sm font-black whitespace-nowrap">
-                <span className="text-amber-400">🌲 Madera: {Math.floor(wood)}</span>
-                <span className="text-red-400">🍖 Carne: {Math.floor(meat)}</span>
-                {currentPhase >= 4 && <span className="text-yellow-400 col-span-2">💰 Oro: {Math.floor(gold)}</span>}
-                <span className="text-slate-400">Fuertes: {fortCount}</span>
-                <span className="text-blue-400">Soldados: {soldierCount}</span>
-                <span className="text-stone-400">Torres: {towerCount}</span>
-              </div>
-            </div>
-
             {/* Action Buttons GRID */}
             <div className="flex-1 grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5 p-1 min-h-0">
               {/* Row 1: Buildings (Unlocked per Phase) */}
