@@ -71,7 +71,7 @@ const PHASE_TUTORIAL: Record<number, { title: string; steps: string[]; goal: str
     title: '🏠 La Aldea',
     steps: [
       'Ahora puedes Construir edificios desde el panel inferior derecho.',
-      'Construye una segunda Casa (50M) para reclutar más trabajadores.',
+      'Construye una segunda Casa (25M) para reclutar más trabajadores.',
       'Cada casa genera hasta 2 trabajadores automáticamente con el tiempo.',
     ],
     goal: '🎯 Tener 2 casas y al menos 4 trabajadores activos',
@@ -104,6 +104,15 @@ const PHASE_TUTORIAL: Record<number, { title: string; steps: string[]; goal: str
       '¡Atención! A partir de ahora, otras aldeas podrían expandirse por el mapa.',
     ],
     goal: '🎯 Construye un Fuerte y recluta a tu primer Soldado',
+  },
+  6: {
+    title: '⚔️ La Batalla Final',
+    steps: [
+      'Esta es una partida completa: tú contra la máquina.',
+      'Expande tu aldea, recolecta recursos y entrena un gran ejército.',
+      'Localiza la base enemiga y destrúyela por completo.',
+    ],
+    goal: '🎯 Destruye todos los edificios enemigos para ganar el juego',
   },
 };
 
@@ -199,6 +208,7 @@ export default function App() {
   
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [editorTool, setEditorTool] = useState<string>('MOVE');
+  const previousPlayedPhaseRef = useRef<number | null>(null);
   const nextBuildingIdRef = useRef(1);
   const nextCharIdRef = useRef(1);
   const nextTreeIdRef = useRef(1);
@@ -304,29 +314,77 @@ export default function App() {
   useEffect(() => {
     if (gameState !== 'PLAYING') return;
 
-    setWood(0); setAiWood(0); setMeat(0); setAiMeat(0);
-    setWorkers([{ id: 0, name: 'Juan', mode: 'GATHER', role: 'WOOD' }]);
-    setPlayerHouseCount(1); setButcherShopCount(0); setFortCount(0); setSoldierCount(0); setMarketCount(0);
-    setAiHouseCount(currentPhase <= 4 ? 0 : 1); setAiButcherShopCount(0); setAiFortCount(0); setAiSoldierCount(0);
+    const isContinuingTutorial = previousPlayedPhaseRef.current !== null && 
+                                 currentPhase === previousPlayedPhaseRef.current + 1 && 
+                                 currentPhase <= 5;
+
+    if (!isContinuingTutorial) {
+      setWood(0); setAiWood(0); setMeat(0); setAiMeat(0);
+      setWorkers([{ id: 0, name: 'Juan', mode: 'GATHER', role: 'WOOD' }]);
+      setPlayerHouseCount(1); setButcherShopCount(0); setFortCount(0); setSoldierCount(0); setMarketCount(0);
+      setAiHouseCount(currentPhase <= 4 ? 0 : 1); setAiButcherShopCount(0); setAiFortCount(0); setAiSoldierCount(0);
+      setGold(0);
+      setMarketOpen(false);
+      setActiveCards([]);
+      activeCardsRef.current = new Set();
+      currentGoldRef.current = 0;
+      buildMarketRef.current = 0;
+      currentWoodRef.current = 0;
+      currentAiWoodRef.current = 0;
+      currentMeatRef.current = 0;
+      currentAiMeatRef.current = 0;
+    } else {
+      // Logic for continuing: keep resources and buildings
+      setWood(Math.floor(currentWoodRef.current));
+      setMeat(Math.floor(currentMeatRef.current));
+      setGold(Math.floor(currentGoldRef.current));
+      
+      // Preserve workers
+      setWorkers([...workersRef.current]);
+      
+      // Sync counts
+      setPlayerHouseCount(playerHousesRef.current.length);
+      setButcherShopCount(butcherShopsRef.current.length);
+      setFortCount(playerFortsRef.current.length);
+      setMarketCount(playerMarketsRef.current.length);
+      setSoldierCount(playerSoldiersRef.current.length);
+
+      setAiWood(0); setAiMeat(0);
+      setAiHouseCount(currentPhase <= 4 ? 0 : 1); setAiButcherShopCount(0); setAiFortCount(0); setAiSoldierCount(0);
+      currentAiWoodRef.current = 0;
+      currentAiMeatRef.current = 0;
+
+      // Migrate Phase 1 buildings to Phase 2 start area
+      if (previousPlayedPhaseRef.current === 1 && currentPhase === 2) {
+          const dx = 150 - PHASE1_CENTER_X;
+          const dy = 300 - PHASE1_CENTER_Y;
+          playerHousesRef.current.forEach(h => { h.x += dx; h.y += dy; });
+          playerCharactersRef.current.forEach(c => { c.x += dx; c.y += dy; });
+          butcherShopsRef.current.forEach(b => { b.x += dx; b.y += dy; });
+          playerHuntersRef.current.forEach(h => { h.x += dx; h.y += dy; });
+          playerMarketsRef.current.forEach(m => { m.x += dx; m.y += dy; });
+          playerFortsRef.current.forEach(f => { f.x += dx; f.y += dy; });
+          playerSoldiersRef.current.forEach(s => { s.x += dx; s.y += dy; });
+          
+          // Move camera to the new focus
+          cameraRef.current = { x: 150, y: 300, zoom: 1.2 };
+          targetCameraRef.current = { x: 150, y: 300, zoom: 1.2 };
+      }
+    }
+
     setGameOver(null);
     setShowTutorial(true);
-    setGold(0);
-    setMarketOpen(false);
-    setActiveCards([]);
-    activeCardsRef.current = new Set();
-    currentGoldRef.current = 0;
-    buildMarketRef.current = 0;
-    if (currentPhase === 4) {
+    
+    if (currentPhase >= 4 && !isContinuingTutorial) {
       const shuffled = [...ALL_CARDS].sort(() => Math.random() - 0.5);
       setDeck(shuffled);
-    } else {
-      setDeck([]);
+    } else if (currentPhase >= 4 && isContinuingTutorial && deck.length === 0) {
+      const shuffled = [...ALL_CARDS].sort(() => Math.random() - 0.5);
+      setDeck(shuffled);
     }
+    
+    previousPlayedPhaseRef.current = currentPhase;
     gameOverRef.current = null;
-    currentWoodRef.current = 0;
-    currentAiWoodRef.current = 0;
-    currentMeatRef.current = 0;
-    currentAiMeatRef.current = 0;
     lastUpdateRef.current = performance.now();
     let animationId: any;
 
@@ -341,65 +399,93 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Initialize Entity Refs
-    nextBuildingIdRef.current = 2;
-    nextCharIdRef.current = 2;
-    nextTreeIdRef.current = 1;
+    if (!isContinuingTutorial) {
+      // Initialize Entity Refs
+      nextBuildingIdRef.current = 2;
+      nextCharIdRef.current = 2;
+      nextTreeIdRef.current = 1;
 
-    const houseX = currentPhase === 1 ? PHASE1_CENTER_X : 150;
-    const houseY = currentPhase === 1 ? PHASE1_CENTER_Y : 300;
-    
-    playerHousesRef.current = [{ id: 0, x: houseX, y: houseY, hp: 100, spawnTimer: 3600 }];
-    butcherShopsRef.current = [];
-    playerMarketsRef.current = [];
-    playerFortsRef.current = [];
-    playerSoldiersRef.current = [];
-    wildBoarsRef.current = [];
-    
-    playerCharactersRef.current = [
-      {
-        id: 0,
-        houseId: 0,
-        x: houseX,
-        y: houseY,
-        state: 'IDLE',
-        target: null as { x: number, y: number, tree?: Tree } | null,
-        onReach: 'IDLE',
-        timer: 0,
-        carrying: null as 'WOOD' | 'SEED' | null,
-        energy: 100,
-        isExhausted: false,
-        isResting: false,
-        hp: 10,
-        currentMode: 'GATHER' as GameMode,
-      }
-    ];
+      const houseX = currentPhase === 1 ? PHASE1_CENTER_X : 150;
+      const houseY = currentPhase === 1 ? PHASE1_CENTER_Y : 300;
+      
+      playerHousesRef.current = [{ id: 0, x: houseX, y: houseY, hp: 100, spawnTimer: 3600 }];
+      butcherShopsRef.current = [];
+      playerMarketsRef.current = [];
+      playerFortsRef.current = [];
+      playerSoldiersRef.current = [];
+      wildBoarsRef.current = [];
+      
+      playerCharactersRef.current = [
+        {
+          id: 0,
+          houseId: 0,
+          x: houseX,
+          y: houseY,
+          state: 'IDLE',
+          target: null as { x: number, y: number, tree?: Tree } | null,
+          onReach: 'IDLE',
+          timer: 0,
+          carrying: null as 'WOOD' | 'SEED' | null,
+          energy: 100,
+          isExhausted: false,
+          isResting: false,
+          hp: 10,
+          currentMode: 'GATHER' as GameMode,
+        }
+      ];
 
-    aiHousesRef.current = currentPhase <= 4 ? [] : [{ id: 1000, x: 650, y: 300, hp: 100, spawnTimer: 3600 }];
-    aiButcherShopsRef.current = [];
-    aiFortsRef.current = [];
-    aiSoldiersRef.current = [];
-    playerHuntersRef.current = [];
-    aiHuntersRef.current = [];
+      aiHousesRef.current = currentPhase <= 4 ? [] : [{ id: 1000, x: 650, y: 300, hp: 100, spawnTimer: 3600 }];
+      aiButcherShopsRef.current = [];
+      aiFortsRef.current = [];
+      aiSoldiersRef.current = [];
+      playerHuntersRef.current = [];
+      aiHuntersRef.current = [];
 
-    aiCharactersRef.current = currentPhase <= 4 ? [] : [
-      {
-        id: 1000,
-        houseId: 1000,
-        x: 650,
-        y: 300,
-        state: 'IDLE',
-        target: null as { x: number, y: number, tree?: Tree } | null,
-        onReach: 'IDLE',
-        timer: 0,
-        carrying: null as 'WOOD' | 'SEED' | null,
-        energy: 100,
-        isExhausted: false,
-        isResting: false,
-        hp: 10,
-        currentMode: 'GATHER' as GameMode,
-      }
-    ];
+      aiCharactersRef.current = currentPhase <= 4 ? [] : [
+        {
+          id: 1000,
+          houseId: 1000,
+          x: 650,
+          y: 300,
+          state: 'IDLE',
+          target: null as { x: number, y: number, tree?: Tree } | null,
+          onReach: 'IDLE',
+          timer: 0,
+          carrying: null as 'WOOD' | 'SEED' | null,
+          energy: 100,
+          isExhausted: false,
+          isResting: false,
+          hp: 10,
+          currentMode: 'GATHER' as GameMode,
+        }
+      ];
+    } else {
+        // AI initialization for continuing phases
+        aiHousesRef.current = currentPhase <= 4 ? [] : [{ id: 1000, x: 650, y: 300, hp: 100, spawnTimer: 3600 }];
+        aiButcherShopsRef.current = [];
+        aiFortsRef.current = [];
+        aiSoldiersRef.current = [];
+        aiHuntersRef.current = [];
+
+        aiCharactersRef.current = currentPhase <= 4 ? [] : [
+          {
+            id: 1000,
+            houseId: 1000,
+            x: 650,
+            y: 300,
+            state: 'IDLE',
+            target: null as { x: number, y: number, tree?: Tree } | null,
+            onReach: 'IDLE',
+            timer: 0,
+            carrying: null as 'WOOD' | 'SEED' | null,
+            energy: 100,
+            isExhausted: false,
+            isResting: false,
+            hp: 10,
+            currentMode: 'GATHER' as GameMode,
+          }
+        ];
+    }
     
     // Aliases for local usage within initialization to satisfy existing logic
     const playerHouses = playerHousesRef.current;
@@ -1228,9 +1314,9 @@ export default function App() {
             gameOverRef.current = "VICTORY_PHASE_5";
             setGameOver(gameOverRef.current);
           }
-        } else if (currentPhase > 5) {
+        } else if (currentPhase === 6) {
           if (aiHouses.length === 0 && aiButcherShops.length === 0 && aiForts.length === 0) {
-            gameOverRef.current = "¡Has ganado! Has destruido todos los edificios enemigos.";
+            gameOverRef.current = "VICTORY_PHASE_6";
             setGameOver(gameOverRef.current);
           }
         }
@@ -2696,6 +2782,7 @@ export default function App() {
       { id: 3, name: 'La Caza',     desc: 'Caza animales para carne',      pos: { top: '25%', left: '30%' }, iconPos: '50% 0%'  },
       { id: 4, name: 'El Comercio', desc: 'Intercambia y mejora',          pos: { top: '40%', left: '65%' }, iconPos: '75% 0%'  },
       { id: 5, name: 'El Fuerte',   desc: 'Defensa y entrenamiento',       pos: { top: '20%', left: '80%' }, iconPos: '100% 0%' },
+      { id: 6, name: 'La Gran Batalla', desc: 'Duelo final contra la máquina', pos: { top: '35%', left: '85%' }, iconPos: '25% 0%'  },
     ];
 
     return (
@@ -3111,7 +3198,7 @@ export default function App() {
         )}
 
         {/* Market Shop Modal */}
-        {marketOpen && currentPhase === 4 && (
+        {marketOpen && currentPhase >= 4 && (
           <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40 backdrop-blur-sm">
             <div className="bg-stone-900 border-2 border-yellow-500 rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-[0_0_60px_rgba(234,179,8,0.3)] max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
@@ -3285,8 +3372,32 @@ export default function App() {
               }}
               className="px-12 py-5 bg-white text-indigo-700 font-black text-xl uppercase italic rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.8)]"
             >
-              Volver al Mapa
+              ¡A la Batalla! →
             </button>
+          </div>
+        )}
+        {gameOver === "VICTORY_PHASE_6" && (
+          <div className="absolute inset-0 bg-stone-900 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50 overflow-hidden">
+            <h2 className="text-5xl md:text-8xl font-black mb-6 tracking-tighter uppercase italic drop-shadow-2xl text-amber-500 animate-bounce">¡CONQUISTA TOTAL!</h2>
+            <div className="w-32 h-2 bg-amber-600 rounded-full mb-8 shadow-[0_0_20px_rgba(245,158,11,0.5)]" />
+            <p className="text-xl md:text-3xl font-bold mb-12 max-w-2xl drop-shadow-md leading-tight text-stone-300">
+              Has derrotado a la máquina y unificado las tierras boscosas bajo tu mando. 
+              <br/><span className="text-amber-400 mt-4 block">¡Eres el Wood Gatherer definitivo!</span>
+            </p>
+            <div className="flex flex-col md:flex-row gap-6">
+              <button 
+                onClick={() => { setGameState('TITLE'); }}
+                className="px-12 py-5 bg-amber-600 text-white font-black text-xl uppercase italic rounded-2xl hover:bg-amber-500 hover:scale-105 transition-all shadow-xl"
+              >
+                Menú Principal
+              </button>
+              <button 
+                onClick={() => { setGameState('MAP'); }}
+                className="px-12 py-5 bg-stone-800 text-stone-300 font-black text-xl uppercase italic rounded-2xl hover:bg-stone-700 hover:scale-105 transition-all shadow-xl"
+              >
+                Volver al Mapa
+              </button>
+            </div>
           </div>
         )}
         {gameOver && gameOver !== "VICTORY_PHASE_1" && gameOver !== "VICTORY_PHASE_2" && gameOver !== "VICTORY_PHASE_3" && gameOver !== "VICTORY_PHASE_4" && (
@@ -3309,7 +3420,7 @@ export default function App() {
         {/* Left Column: Resources & Info */}
         <div className="w-full md:w-1/4 p-4 md:border-r-2 border-b-2 md:border-b-0 border-stone-700 flex flex-col overflow-y-auto touch-pan-y shrink-0 md:shrink">
           <h2 className="text-xl font-black text-amber-500 mb-2 tracking-wider">
-            {currentPhase === 1 ? 'FASE 1: LA TALA' : currentPhase === 2 ? 'FASE 2: LA ALDEA' : currentPhase === 3 ? 'FASE 3: LA CAZA' : currentPhase === 4 ? 'FASE 4: EL COMERCIO' : 'FASE 5: EL FUERTE'}
+            {currentPhase === 1 ? 'FASE 1: LA TALA' : currentPhase === 2 ? 'FASE 2: LA ALDEA' : currentPhase === 3 ? 'FASE 3: LA CAZA' : currentPhase === 4 ? 'FASE 4: EL COMERCIO' : currentPhase === 5 ? 'FASE 5: EL FUERTE' : 'FASE 6: LA GRAN BATALLA'}
           </h2>
           
           <div className="flex flex-col gap-2">
@@ -3427,40 +3538,46 @@ export default function App() {
               <span className="font-bold text-xs">Casa</span>
               <span className="text-[9px] text-amber-300">{25 * Math.pow(2, playerHouseCount - 1)} M</span>
             </button>
-            <button 
-              onClick={() => {
-                const cost = 25 * Math.pow(2, butcherShopCount);
-                console.log(`BUTCHER BUTTON CLICKED: wood=${wood}, cost=${cost}`);
-                if (wood >= cost) {
-                  buildButcherShopRef.current++;
-                  console.log(`Butcher queued! Ref is now: ${buildButcherShopRef.current}`);
-                }
-              }}
-              disabled={wood < 25 * Math.pow(2, butcherShopCount)}
-              className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-800 hover:border-red-500 border border-stone-600 rounded relative"
-            >
-              <span className="font-bold text-xs">Carnicería</span>
-              <span className="text-[9px] text-amber-300">{25 * Math.pow(2, butcherShopCount)} M</span>
-            </button>
-            <button 
-              onClick={() => wood >= 50 * Math.pow(2, fortCount) && meat >= 50 * Math.pow(2, fortCount) && buildFortRef.current++}
-              disabled={wood < 50 * Math.pow(2, fortCount) || meat < 50 * Math.pow(2, fortCount)}
-              className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-800 hover:border-blue-500 border border-stone-600 rounded relative"
-            >
-              <span className="font-bold text-xs">Fuerte</span>
-              <div className="flex gap-1">
-                <span className="text-[9px] text-amber-300">{50 * Math.pow(2, fortCount)} M</span>
-                <span className="text-[9px] text-red-300">{50 * Math.pow(2, fortCount)} C</span>
-              </div>
-            </button>
-            <button 
-              onClick={() => meat >= (activeCards.some(c=>c.id==='mercenary')?25:50) && fortCount > 0 && buildSoldierRef.current++}
-              disabled={meat < (activeCards.some(c=>c.id==='mercenary')?25:50) || fortCount === 0}
-              className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-600 hover:border-slate-400 border border-stone-600 rounded relative"
-            >
-              <span className="font-bold text-xs">Soldado</span>
-              <span className="text-[9px] text-red-300">{activeCards.some(c=>c.id==='mercenary')?25:50} C</span>
-            </button>
+            {currentPhase >= 3 && (
+              <button 
+                onClick={() => {
+                  const cost = 25 * Math.pow(2, butcherShopCount);
+                  console.log(`BUTCHER BUTTON CLICKED: wood=${wood}, cost=${cost}`);
+                  if (wood >= cost) {
+                    buildButcherShopRef.current++;
+                    console.log(`Butcher queued! Ref is now: ${buildButcherShopRef.current}`);
+                  }
+                }}
+                disabled={wood < 25 * Math.pow(2, butcherShopCount)}
+                className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-800 hover:border-red-500 border border-stone-600 rounded relative"
+              >
+                <span className="font-bold text-xs">Carnicería</span>
+                <span className="text-[9px] text-amber-300">{25 * Math.pow(2, butcherShopCount)} M</span>
+              </button>
+            )}
+            {currentPhase >= 5 && (
+              <>
+                <button 
+                  onClick={() => wood >= 50 * Math.pow(2, fortCount) && meat >= 50 * Math.pow(2, fortCount) && buildFortRef.current++}
+                  disabled={wood < 50 * Math.pow(2, fortCount) || meat < 50 * Math.pow(2, fortCount)}
+                  className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-800 hover:border-blue-500 border border-stone-600 rounded relative"
+                >
+                  <span className="font-bold text-xs">Fuerte</span>
+                  <div className="flex gap-1">
+                    <span className="text-[9px] text-amber-300">{50 * Math.pow(2, fortCount)} M</span>
+                    <span className="text-[9px] text-red-300">{50 * Math.pow(2, fortCount)} C</span>
+                  </div>
+                </button>
+                <button 
+                  onClick={() => meat >= (activeCards.some(c=>c.id==='mercenary')?25:50) && fortCount > 0 && buildSoldierRef.current++}
+                  disabled={meat < (activeCards.some(c=>c.id==='mercenary')?25:50) || fortCount === 0}
+                  className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-600 hover:border-slate-400 border border-stone-600 rounded relative"
+                >
+                  <span className="font-bold text-xs">Soldado</span>
+                  <span className="text-[9px] text-red-300">{activeCards.some(c=>c.id==='mercenary')?25:50} C</span>
+                </button>
+              </>
+            )}
             {currentPhase >= 4 && (
               <button
                 onClick={() => wood >= 150 && meat >= 50 && buildMarketRef.current++}
