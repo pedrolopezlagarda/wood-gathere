@@ -143,6 +143,9 @@ export default function App() {
   const [aiHouseCount, setAiHouseCount] = useState(1);
   const [aiButcherShopCount, setAiButcherShopCount] = useState(0);
   const [aiFortCount, setAiFortCount] = useState(0);
+  const [towerCount, setTowerCount] = useState(0);
+  const [aiTowerCount, setAiTowerCount] = useState(0);
+  const [isPlacingTower, setIsPlacingTower] = useState(false);
   const [aiSoldierCount, setAiSoldierCount] = useState(0);
   const [gameOver, setGameOver] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -179,6 +182,7 @@ export default function App() {
   const fortImageRef = useRef<HTMLImageElement | null>(null);
   const grassImageRef = useRef<HTMLImageElement | null>(null);
   const rockImageRef = useRef<HTMLImageElement | null>(null);
+  const towerImageRef = useRef<HTMLImageElement | null>(null);
 
   const terrainPatchesRef = useRef<{x: number, y: number, r: number, color: string}[]>([]);
   const decorationsRef = useRef<{x: number, y: number, type: 'grass' | 'rock', scale: number, rotation: number}[]>([]);
@@ -197,6 +201,8 @@ export default function App() {
   const playerFortsRef = useRef<(Point & { id: number, hp: number })[]>([]);
   const aiFortsRef = useRef<(Point & { id: number, hp: number })[]>([]);
   const playerMarketsRef = useRef<(Point & { id: number, hp: number })[]>([]);
+  const playerTowersRef = useRef<(Point & { id: number, hp: number, lastAttack: number })[]>([]);
+  const aiTowersRef = useRef<(Point & { id: number, hp: number, lastAttack: number })[]>([]);
   const playerHuntersRef = useRef<any[]>([]);
   const aiHuntersRef = useRef<any[]>([]);
   const playerCharactersRef = useRef<any[]>([]);
@@ -268,6 +274,12 @@ export default function App() {
       carniceriaImageRef.current = imgCarniceria;
     };
 
+    const imgTower = new Image();
+    imgTower.src = `${import.meta.env.BASE_URL}torre.png`;
+    imgTower.onload = () => {
+      towerImageRef.current = imgTower;
+    };
+
     const imgGrass = new Image();
     imgGrass.src = `${import.meta.env.BASE_URL}hierba_decorativa.png`;
     imgGrass.onload = () => {
@@ -318,13 +330,17 @@ export default function App() {
                                  currentPhase === previousPlayedPhaseRef.current + 1 && 
                                  currentPhase <= 5;
 
-    if (!isContinuingTutorial) {
+    // Phase 6 always starts fresh
+    const forceReset = currentPhase === 6;
+
+    if (!isContinuingTutorial || forceReset) {
       setWood(0); setAiWood(0); setMeat(0); setAiMeat(0);
       setWorkers([{ id: 0, name: 'Juan', mode: 'GATHER', role: 'WOOD' }]);
-      setPlayerHouseCount(1); setButcherShopCount(0); setFortCount(0); setSoldierCount(0); setMarketCount(0);
-      setAiHouseCount(currentPhase <= 4 ? 0 : 1); setAiButcherShopCount(0); setAiFortCount(0); setAiSoldierCount(0);
+      setPlayerHouseCount(1); setButcherShopCount(0); setFortCount(0); setSoldierCount(0); setMarketCount(0); setTowerCount(0);
+      setAiHouseCount(currentPhase <= 5 ? 0 : 1); setAiButcherShopCount(0); setAiFortCount(0); setAiSoldierCount(0); setAiTowerCount(0);
       setGold(0);
       setMarketOpen(false);
+      setIsPlacingTower(false);
       setActiveCards([]);
       activeCardsRef.current = new Set();
       currentGoldRef.current = 0;
@@ -348,9 +364,10 @@ export default function App() {
       setFortCount(playerFortsRef.current.length);
       setMarketCount(playerMarketsRef.current.length);
       setSoldierCount(playerSoldiersRef.current.length);
+      setTowerCount(playerTowersRef.current.length);
 
       setAiWood(0); setAiMeat(0);
-      setAiHouseCount(currentPhase <= 4 ? 0 : 1); setAiButcherShopCount(0); setAiFortCount(0); setAiSoldierCount(0);
+      setAiHouseCount(0); setAiButcherShopCount(0); setAiFortCount(0); setAiSoldierCount(0); setAiTowerCount(0);
       currentAiWoodRef.current = 0;
       currentAiMeatRef.current = 0;
 
@@ -365,6 +382,7 @@ export default function App() {
           playerMarketsRef.current.forEach(m => { m.x += dx; m.y += dy; });
           playerFortsRef.current.forEach(f => { f.x += dx; f.y += dy; });
           playerSoldiersRef.current.forEach(s => { s.x += dx; s.y += dy; });
+          playerTowersRef.current.forEach(t => { t.x += dx; t.y += dy; });
           
           // Move camera to the new focus
           cameraRef.current = { x: 150, y: 300, zoom: 1.2 };
@@ -412,6 +430,7 @@ export default function App() {
       butcherShopsRef.current = [];
       playerMarketsRef.current = [];
       playerFortsRef.current = [];
+      playerTowersRef.current = [];
       playerSoldiersRef.current = [];
       wildBoarsRef.current = [];
       
@@ -437,6 +456,7 @@ export default function App() {
       aiHousesRef.current = currentPhase <= 4 ? [] : [{ id: 1000, x: 650, y: 300, hp: 100, spawnTimer: 3600 }];
       aiButcherShopsRef.current = [];
       aiFortsRef.current = [];
+      aiTowersRef.current = [];
       aiSoldiersRef.current = [];
       playerHuntersRef.current = [];
       aiHuntersRef.current = [];
@@ -1245,6 +1265,33 @@ export default function App() {
         }
       }
 
+      // Update Towers (Attack nearby AI units)
+      for (const t of playerTowersRef.current) {
+        if (!t) continue;
+        t.lastAttack -= dt;
+        if (t.lastAttack <= 0) {
+          // Find nearest enemy (soldier or character)
+          let nearestEnemy = null;
+          let minEnemyDist = Infinity;
+          const enemies = [...aiSoldiers, ...aiCharacters, ...aiHuntersRef.current];
+          enemies.forEach(e => {
+            if (e && e.hp > 0) {
+              const dist = Math.hypot(e.x - t.x, e.y - t.y);
+              if (dist < minEnemyDist) {
+                minEnemyDist = dist;
+                nearestEnemy = e;
+              }
+            }
+          });
+
+          if (nearestEnemy && minEnemyDist < 150) {
+            nearestEnemy.hp -= 2; // High damage tower shot
+            t.lastAttack = 60; // 1 second cooldown
+            // Visual effect is handled in draw or just left as is
+          }
+        }
+      }
+
       // Remove dead entities
       const removeDead = (arr: any[]) => {
         for (let i = arr.length - 1; i >= 0; i--) {
@@ -1272,6 +1319,8 @@ export default function App() {
       removeDead(playerForts);
       removeDead(aiForts);
       removeDead(playerMarkets);
+      removeDead(playerTowersRef.current);
+      removeDead(aiTowersRef.current);
 
       // Update counts
       setPlayerHouseCount(playerHouses.length);
@@ -1279,10 +1328,12 @@ export default function App() {
       setFortCount(playerForts.length);
       setSoldierCount(playerSoldiers.length);
       setMarketCount(playerMarkets.length);
+      setTowerCount(playerTowersRef.current.length);
       setAiHouseCount(aiHouses.length);
       setAiButcherShopCount(aiButcherShops.length);
       setAiFortCount(aiForts.length);
       setAiSoldierCount(aiSoldiers.length);
+      setAiTowerCount(aiTowersRef.current.length);
 
       // Check Win/Loss Condition
       if (!gameOverRef.current) {
@@ -2566,6 +2617,41 @@ export default function App() {
         ctx.fillText('M', m.x, m.y);
         drawHP(m.x, m.y + 22, m.hp, 200, '#16a34a');
       });
+
+      // Draw Player Towers
+      playerTowersRef.current.forEach(t => {
+        if (!t) return;
+        drawShadow(t.x, t.y + 10, 20, 10);
+        if (towerImageRef.current && towerImageRef.current.complete) {
+          const width = 40;
+          const height = 40;
+          ctx.drawImage(towerImageRef.current, t.x - width / 2, t.y - height / 2, width, height);
+        } else {
+          ctx.fillStyle = '#4b5563'; // gray-600
+          ctx.fillRect(t.x - 15, t.y - 20, 30, 40);
+          ctx.fillStyle = '#1f2937';
+          ctx.fillRect(t.x - 12, t.y - 23, 24, 6);
+        }
+        drawHP(t.x, t.y + 25, t.hp, 100, '#16a34a');
+      });
+
+      // Draw AI Towers
+      aiTowersRef.current.forEach(t => {
+        if (!t) return;
+        drawShadow(t.x, t.y + 10, 20, 10);
+        if (towerImageRef.current && towerImageRef.current.complete) {
+          const width = 40;
+          const height = 40;
+          ctx.drawImage(towerImageRef.current, t.x - width / 2, t.y - height / 2, width, height);
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(t.x - width / 2, t.y - height / 2, width, height);
+        } else {
+          ctx.fillStyle = '#7f1d1d';
+          ctx.fillRect(t.x - 15, t.y - 20, 30, 40);
+        }
+        drawHP(t.x, t.y + 25, t.hp, 100, '#ef4444');
+      });
     };
 
     animationId = requestAnimationFrame(loop);
@@ -2907,88 +2993,98 @@ export default function App() {
           width={1}
           height={1}
           onMouseDown={(e) => {
-            if (isAdminMode) {
-              const rect = canvasRef.current?.getBoundingClientRect();
-              if (rect) {
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-                
-                // Convert screen coords to world coords
-                const wx = cameraRef.current.x + (mouseX - rect.width / 2) / cameraRef.current.zoom;
-                const wy = cameraRef.current.y + (mouseY - rect.height / 2) / cameraRef.current.zoom;
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const wx = cameraRef.current.x + (mouseX - rect.width / 2) / cameraRef.current.zoom;
+            const wy = cameraRef.current.y + (mouseY - rect.height / 2) / cameraRef.current.zoom;
 
-                if (editorTool === 'DELETE') {
-                  // Find closest thing and remove it
-                  const findAndRemove = (arrRef: React.MutableRefObject<any[]>, threshold = 32) => {
-                    const idx = arrRef.current.findIndex(obj => Math.hypot(obj.x - wx, obj.y - wy) < threshold);
-                    if (idx !== -1) {
-                      arrRef.current.splice(idx, 1);
-                      return true;
-                    }
-                    return false;
-                  };
-                  
-                  if (findAndRemove(treesRef)) {}
-                  else if (findAndRemove(playerCharactersRef)) {}
-                  else if (findAndRemove(aiCharactersRef)) {}
-                  else if (findAndRemove(playerHousesRef, 64)) {}
-                  else if (findAndRemove(aiHousesRef, 64)) {}
-                  else if (findAndRemove(butcherShopsRef, 48)) {}
-                  else if (findAndRemove(aiButcherShopsRef, 48)) {}
-                  else if (findAndRemove(playerFortsRef, 80)) {}
-                  else if (findAndRemove(aiFortsRef, 80)) {}
-                  else if (findAndRemove(playerMarketsRef, 60)) {}
-                  else if (findAndRemove(wildBoarsRef)) {}
-                  else if (findAndRemove(playerSoldiersRef)) {}
-                  else if (findAndRemove(aiSoldiersRef)) {}
-                  
-                  // Update UI counts after deletion
-                  setPlayerHouseCount(playerHousesRef.current.length);
-                  setButcherShopCount(butcherShopsRef.current.length);
-                  setFortCount(playerFortsRef.current.length);
-                  setSoldierCount(playerSoldiersRef.current.length);
-                  setMarketCount(playerMarketsRef.current.length);
-                  setAiHouseCount(aiHousesRef.current.length);
-                  setAiButcherShopCount(aiButcherShopsRef.current.length);
-                  setAiFortCount(aiFortsRef.current.length);
-                  setAiSoldierCount(aiSoldiersRef.current.length);
-                } else {
-                  // Placement Logic
-                  const id = nextBuildingIdRef.current++; // Using building ID for generic objects too
-                  const charId = nextCharIdRef.current++;
-                  
-                  switch(editorTool) {
-                    case 'TREE_PLAYER': treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 3, state: 'GROWN', owner: 'PLAYER' }); break;
-                    case 'TREE_AI': treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 3, state: 'GROWN', owner: 'AI' }); break;
-                    case 'TREE_BORDER': treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 0, state: 'GROWN', owner: 'BORDER' }); break;
-                    case 'WORKER_PLAYER': 
-                      playerCharactersRef.current.push({
-                        id: charId, x: wx, y: wy, state: 'IDLE', target: null, onReach: 'IDLE', timer: 0, carrying: null,
-                        energy: 100, isExhausted: false, isResting: false, hp: 10, currentMode: 'GATHER'
-                      });
-                      setWorkers(prev => [...prev, { id: charId, name: NAMES[prev.length % NAMES.length], mode: 'GATHER', role: 'WOOD' }]);
-                      break;
-                    case 'WORKER_AI':
-                      aiCharactersRef.current.push({
-                        id: charId, x: wx, y: wy, state: 'IDLE', target: null, onReach: 'IDLE', timer: 0, carrying: null,
-                        energy: 100, isExhausted: false, isResting: false, hp: 10, currentMode: 'GATHER'
-                      });
-                      break;
-                    case 'BOAR': wildBoarsRef.current.push({ id: id, x: wx, y: wy, hp: 10 }); break;
-                    case 'HOUSE_PLAYER': playerHousesRef.current.push({ id: id, x: wx, y: wy, hp: 100, spawnTimer: 3600 }); setPlayerHouseCount(playerHousesRef.current.length); break;
-                    case 'HOUSE_AI': aiHousesRef.current.push({ id: id, x: wx, y: wy, hp: 100, spawnTimer: 3600 }); setAiHouseCount(aiHousesRef.current.length); break;
-                    case 'FORT_PLAYER': playerFortsRef.current.push({ id: id, x: wx, y: wy, hp: 100 }); setFortCount(playerFortsRef.current.length); break;
-                    case 'SOLDIER_PLAYER': 
-                      playerSoldiersRef.current.push({
-                        id: charId, x: wx, y: wy, hp: 20, maxHp: 20, state: 'IDLE', target: null, onReach: 'IDLE', timer: 0, energy: 100, isExhausted: false, isResting: false, currentMode: 'SOLDIER'
-                      });
-                      setWorkers(prev => [...prev, { id: charId, name: NAMES[prev.length % NAMES.length], mode: 'IDLE', role: 'SOLDIER', currentMode: 'SOLDIER' }]);
-                      setSoldierCount(playerSoldiersRef.current.length);
-                      break;
-                  }
-                }
+            if (isPlacingTower) {
+              if (wood >= 50) {
+                const id = nextBuildingIdRef.current++;
+                playerTowersRef.current.push({ id, x: wx, y: wy, hp: 100, lastAttack: 0 });
+                setWood(w => w - 50);
+                currentWoodRef.current -= 50;
+                setTowerCount(playerTowersRef.current.length);
+                setIsPlacingTower(false);
               }
-              return; // Don't drag while in editor if we clicked a tool action
+              return;
+            }
+
+            if (isAdminMode) {
+              if (editorTool === 'DELETE') {
+                const findAndRemove = (arrRef: React.MutableRefObject<any[]>, threshold = 32) => {
+                  const idx = arrRef.current.findIndex(obj => Math.hypot(obj.x - wx, obj.y - wy) < threshold);
+                  if (idx !== -1) {
+                    arrRef.current.splice(idx, 1);
+                    return true;
+                  }
+                  return false;
+                };
+                
+                if (findAndRemove(treesRef)) {}
+                else if (findAndRemove(playerCharactersRef)) {}
+                else if (findAndRemove(aiCharactersRef)) {}
+                else if (findAndRemove(playerHousesRef, 64)) {}
+                else if (findAndRemove(aiHousesRef, 64)) {}
+                else if (findAndRemove(butcherShopsRef, 48)) {}
+                else if (findAndRemove(aiButcherShopsRef, 48)) {}
+                else if (findAndRemove(playerFortsRef, 80)) {}
+                else if (findAndRemove(aiFortsRef, 80)) {}
+                else if (findAndRemove(playerMarketsRef, 60)) {}
+                else if (findAndRemove(playerTowersRef, 40)) {}
+                else if (findAndRemove(aiTowersRef, 40)) {}
+                else if (findAndRemove(wildBoarsRef)) {}
+                else if (findAndRemove(playerSoldiersRef)) {}
+                else if (findAndRemove(aiSoldiersRef)) {}
+                
+                // Update UI counts after deletion
+                setPlayerHouseCount(playerHousesRef.current.length);
+                setButcherShopCount(butcherShopsRef.current.length);
+                setFortCount(playerFortsRef.current.length);
+                setSoldierCount(playerSoldiersRef.current.length);
+                setMarketCount(playerMarketsRef.current.length);
+                setTowerCount(playerTowersRef.current.length);
+                setAiHouseCount(aiHousesRef.current.length);
+                setAiButcherShopCount(aiButcherShopsRef.current.length);
+                setAiFortCount(aiFortsRef.current.length);
+                setAiSoldierCount(aiSoldiersRef.current.length);
+                setAiTowerCount(aiTowersRef.current.length);
+              } else {
+                // Placement Logic
+                const id = nextBuildingIdRef.current++;
+                const charId = nextCharIdRef.current++;
+                if (editorTool === 'TREE') treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 3, state: 'GROWN', owner: 'PLAYER' });
+                else if (editorTool === 'TREE_BORDER') treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 0, state: 'GROWN', owner: 'BORDER' });
+                else if (editorTool === 'BOAR') wildBoarsRef.current.push({ x: wx, y: wy, state: 'IDLE', target: null, timer: 0, hp: 1, wobblePhase: Math.random() * Math.PI*2, wobbleSpeed: 0.05, angle: 0 });
+                else if (editorTool === 'HOUSE_P') {
+                  const hId = nextBuildingIdRef.current++;
+                  playerHousesRef.current.push({ id: hId, x: wx, y: wy, hp: 100, spawnTimer: 3600 });
+                  playerCharactersRef.current.push({ id: nextCharIdRef.current++, houseId: hId, x: wx, y: wy, state: 'IDLE', target: null, onReach: 'IDLE', timer: 0, carrying: null, energy: 100, isExhausted: false, isResting: false, hp: 10, currentMode: 'GATHER' });
+                }
+                else if (editorTool === 'HOUSE_AI') {
+                   const hId = nextBuildingIdRef.current++;
+                   aiHousesRef.current.push({ id: hId, x: wx, y: wy, hp: 100, spawnTimer: 3600 });
+                   aiCharactersRef.current.push({ id: nextCharIdRef.current++, houseId: hId, x: wx, y: wy, state: 'IDLE', target: null, onReach: 'IDLE', timer: 0, carrying: null, energy: 100, isExhausted: false, isResting: false, hp: 10, currentMode: 'GATHER' });
+                }
+                else if (editorTool === 'BUTCHER_P') butcherShopsRef.current.push({ id, x: wx, y: wy, hp: 100 });
+                else if (editorTool === 'BUTCHER_AI') aiButcherShopsRef.current.push({ id, x: wx, y: wy, hp: 100 });
+                else if (editorTool === 'FORT_P') playerFortsRef.current.push({ id, x: wx, y: wy, hp: 100 });
+                else if (editorTool === 'FORT_AI') aiFortsRef.current.push({ id, x: wx, y: wy, hp: 100 });
+                else if (editorTool === 'TOWER_P') playerTowersRef.current.push({ id, x: wx, y: wy, hp: 100, lastAttack: 0 });
+                else if (editorTool === 'TOWER_AI') aiTowersRef.current.push({ id, x: wx, y: wy, hp: 100, lastAttack: 0 });
+                
+                setPlayerHouseCount(playerHousesRef.current.length);
+                setButcherShopCount(butcherShopsRef.current.length);
+                setFortCount(playerFortsRef.current.length);
+                setTowerCount(playerTowersRef.current.length);
+                setAiHouseCount(aiHousesRef.current.length);
+                setAiButcherShopCount(aiButcherShopsRef.current.length);
+                setAiFortCount(aiFortsRef.current.length);
+                setAiTowerCount(aiTowersRef.current.length);
+              }
+              return;
             }
             isDraggingRef.current = true;
             lastMousePosRef.current = { x: e.clientX, y: e.clientY };
@@ -3522,84 +3618,108 @@ export default function App() {
         {/* Right Column: Build & Settings */}
         <div className="w-full md:w-1/4 p-4 flex flex-col overflow-y-auto touch-pan-y shrink-0 md:shrink">
           <h3 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2 shrink-0">Construcción</h3>
-          <div className="grid grid-cols-2 gap-1 flex-1">
-            <button 
-              onClick={() => {
-                const cost = 25 * Math.pow(2, playerHouseCount - 1);
-                console.log(`CASA BUTTON CLICKED: wood=${wood}, cost=${cost}`);
-                if (wood >= cost) {
-                  buildHouseRef.current++;
-                  console.log(`Casa queued! Ref is now: ${buildHouseRef.current}`);
-                }
-              }}
-              disabled={wood < 25 * Math.pow(2, playerHouseCount - 1)}
-              className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-amber-700 hover:border-amber-500 border border-stone-600 rounded relative"
-            >
-              <span className="font-bold text-xs">Casa</span>
-              <span className="text-[9px] text-amber-300">{25 * Math.pow(2, playerHouseCount - 1)} M</span>
-            </button>
-            {currentPhase >= 3 && (
-              <button 
-                onClick={() => {
-                  const cost = 25 * Math.pow(2, butcherShopCount);
-                  console.log(`BUTCHER BUTTON CLICKED: wood=${wood}, cost=${cost}`);
-                  if (wood >= cost) {
-                    buildButcherShopRef.current++;
-                    console.log(`Butcher queued! Ref is now: ${buildButcherShopRef.current}`);
-                  }
-                }}
-                disabled={wood < 25 * Math.pow(2, butcherShopCount)}
-                className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-800 hover:border-red-500 border border-stone-600 rounded relative"
-              >
-                <span className="font-bold text-xs">Carnicería</span>
-                <span className="text-[9px] text-amber-300">{25 * Math.pow(2, butcherShopCount)} M</span>
-              </button>
-            )}
-            {currentPhase >= 5 && (
-              <>
+          <div className="flex-1 flex flex-col md:flex-row gap-2 p-2 min-h-0 bg-stone-900 overflow-y-auto">
+            {/* Resources HUD (Simplified) */}
+            <div className="flex flex-col gap-1 p-2 bg-stone-800 rounded-lg border border-stone-700 md:w-48 shrink-0">
+              <div className="grid grid-cols-2 gap-x-2 text-[10px] md:text-sm font-black whitespace-nowrap">
+                <span className="text-amber-400">🌲 Madera: {Math.floor(wood)}</span>
+                <span className="text-red-400">🍖 Carne: {Math.floor(meat)}</span>
+                {currentPhase >= 4 && <span className="text-yellow-400 col-span-2">💰 Oro: {Math.floor(gold)}</span>}
+                <span className="text-slate-400">Fuertes: {fortCount}</span>
+                <span className="text-blue-400">Soldados: {soldierCount}</span>
+                <span className="text-stone-400">Torres: {towerCount}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons GRID */}
+            <div className="flex-1 grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5 p-1 min-h-0">
+              {/* Row 1: Buildings (Unlocked per Phase) */}
+              {currentPhase >= 2 && (
                 <button 
-                  onClick={() => wood >= 50 * Math.pow(2, fortCount) && meat >= 50 * Math.pow(2, fortCount) && buildFortRef.current++}
-                  disabled={wood < 50 * Math.pow(2, fortCount) || meat < 50 * Math.pow(2, fortCount)}
-                  className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-blue-800 hover:border-blue-500 border border-stone-600 rounded relative"
+                  onClick={() => {
+                    const cost = 25 * Math.pow(2, playerHouseCount - 1);
+                    if (wood >= cost) buildHouseRef.current++;
+                  }}
+                  disabled={wood < (25 * Math.pow(2, playerHouseCount - 1))}
+                  className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
                 >
-                  <span className="font-bold text-xs">Fuerte</span>
-                  <div className="flex gap-1">
-                    <span className="text-[9px] text-amber-300">{50 * Math.pow(2, fortCount)} M</span>
-                    <span className="text-[9px] text-red-300">{50 * Math.pow(2, fortCount)} C</span>
-                  </div>
+                  <span className="font-bold text-xs">Casa</span>
+                  <span className="text-[9px] text-amber-300">{Math.floor(25 * Math.pow(2, playerHouseCount - 1))} M</span>
                 </button>
+              )}
+
+              {currentPhase >= 3 && (
                 <button 
-                  onClick={() => meat >= (activeCards.some(c=>c.id==='mercenary')?25:50) && fortCount > 0 && buildSoldierRef.current++}
-                  disabled={meat < (activeCards.some(c=>c.id==='mercenary')?25:50) || fortCount === 0}
-                  className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-600 hover:border-slate-400 border border-stone-600 rounded relative"
+                  onClick={() => {
+                    const cost = 25 * Math.pow(2, butcherShopCount);
+                    if (wood >= cost) buildButcherShopRef.current++;
+                  }}
+                  disabled={wood < (25 * Math.pow(2, butcherShopCount))}
+                  className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
                 >
-                  <span className="font-bold text-xs">Soldado</span>
-                  <span className="text-[9px] text-red-300">{activeCards.some(c=>c.id==='mercenary')?25:50} C</span>
+                  <span className="font-bold text-xs">Caza</span>
+                  <span className="text-[9px] text-amber-300">{Math.floor(25 * Math.pow(2, butcherShopCount))} M</span>
                 </button>
-              </>
-            )}
-            {currentPhase >= 4 && (
-              <button
-                onClick={() => wood >= 150 && meat >= 50 && buildMarketRef.current++}
-                disabled={wood < 150 || meat < 50}
-                className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-yellow-700 hover:border-yellow-500 border border-stone-600 rounded relative col-span-2"
-              >
-                <span className="font-bold text-xs">🏪 Comercio</span>
-                <div className="flex gap-2">
-                  <span className="text-[9px] text-amber-300">150 M</span>
-                  <span className="text-[9px] text-red-300">50 C</span>
-                </div>
-              </button>
-            )}
-            {currentPhase >= 4 && marketCount > 0 && (
-              <button
-                onClick={() => setMarketOpen(true)}
-                className="flex flex-col items-center justify-center p-1 bg-yellow-800 hover:bg-yellow-700 border border-yellow-600 rounded relative col-span-2 animate-pulse"
-              >
-                <span className="font-bold text-xs text-yellow-200">🏪 Tienda 💰 {gold}</span>
-                <span className="text-[9px] text-yellow-300">{activeCards.length} cartas activas</span>
-              </button>
-            )}
+              )}
+
+              {currentPhase >= 4 && (
+                <>
+                  <button 
+                    onClick={() => {
+                      if (wood >= 150 && meat >= 50) buildMarketRef.current++;
+                    }}
+                    disabled={wood < 150 || meat < 50 || marketCount >= 1}
+                    className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
+                  >
+                    <span className="font-bold text-xs">Comercio</span>
+                    <span className="text-[9px] text-amber-300">150 M / 50 C</span>
+                  </button>
+                  <button 
+                    onClick={() => marketCount > 0 && setMarketOpen(!marketOpen)}
+                    disabled={marketCount === 0}
+                    className={`flex flex-col items-center justify-center p-1 ${marketOpen ? 'bg-amber-600 border-white' : 'bg-stone-700'} disabled:opacity-30 hover:bg-amber-700 border border-stone-600 rounded relative`}
+                  >
+                    <span className="font-bold text-xs">Tienda</span>
+                    <span className="text-[9px] text-yellow-300">Cartas</span>
+                  </button>
+                </>
+              )}
+
+              {currentPhase >= 5 && (
+                <>
+                  <button 
+                    onClick={() => {
+                      const cost = 50 * Math.pow(2, fortCount);
+                      if (wood >= cost && meat >= cost) buildFortRef.current++;
+                    }}
+                    disabled={wood < (50 * Math.pow(2, fortCount)) || meat < (50 * Math.pow(2, fortCount)) || fortCount >= 1}
+                    className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
+                  >
+                    <span className="font-bold text-xs">Fuerte</span>
+                    <span className="text-[9px] text-amber-300">{50 * Math.pow(2, fortCount)} M/C</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const cost = activeCards.some(c=>c.id==='mercenary')?25:50;
+                      if (meat >= cost) buildSoldierRef.current++;
+                    }}
+                    disabled={(activeCards.some(c=>c.id==='mercenary')?meat<25:meat<50) || fortCount === 0}
+                    className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
+                  >
+                    <span className="font-bold text-xs">Soldado</span>
+                    <span className="text-[9px] text-red-300">{activeCards.some(c=>c.id==='mercenary')?25:50} C</span>
+                  </button>
+                  <button 
+                    onClick={() => wood >= 50 && setIsPlacingTower(!isPlacingTower)}
+                    disabled={wood < 50}
+                    className={`flex flex-col items-center justify-center p-1 ${isPlacingTower ? 'bg-amber-600 border-white' : 'bg-stone-700'} disabled:opacity-30 disabled:cursor-not-allowed hover:bg-amber-700 border border-stone-600 rounded relative`}
+                  >
+                    <span className="font-bold text-xs">Torre</span>
+                    <span className="text-[9px] text-amber-300">50 M</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="mt-2 bg-stone-900 border border-stone-700 p-2 rounded shrink-0">
