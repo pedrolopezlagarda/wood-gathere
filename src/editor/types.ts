@@ -42,7 +42,7 @@ export interface MapData {
     intensity: number;
   };
   tileGroups?: Record<string, { name: string; tiles: string[] }>;
-  tileMetadata?: Record<string, { priority: number; role?: string; frameCount?: number; hasShadow?: boolean }>;
+  tileMetadata?: Record<string, { priority: number; role?: string; frameCount?: number; hasShadow?: boolean; sway?: boolean; isWall?: boolean }>;
 }
 
 export interface EditorConfig {
@@ -58,5 +58,5 @@ export interface TileLibrary {
   name: string;
   groups: Record<string, { name: string; tiles: string[]; priority: number }>;
   tiles: Record<string, string>;
-  metadata: Record<string, { priority: number; role?: string; hasShadow?: boolean }>;
+  metadata: Record<string, { priority: number; role?: string; hasShadow?: boolean; sway?: boolean; isWall?: boolean }>;
 }

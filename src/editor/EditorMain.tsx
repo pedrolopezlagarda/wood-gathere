@@ -724,7 +724,7 @@ export default function App() {
   const [animationFrame, setAnimationFrame] = useState(0);
   const [tool, setTool] = useState<'brush' | 'eraser' | 'fill' | 'light'>('brush');
   const [customTiles, setCustomTiles] = useState<Record<string, string>>({});
-  const [tileMetadata, setTileMetadata] = useState<Record<string, { priority: number; role?: TileRole; frameCount?: number; hasShadow?: boolean; sway?: boolean; shadowOffsetX?: number; shadowOffsetY?: number }>>({});
+  const [tileMetadata, setTileMetadata] = useState<Record<string, { priority: number; role?: TileRole; frameCount?: number; hasShadow?: boolean; sway?: boolean; shadowOffsetX?: number; shadowOffsetY?: number; isWall?: boolean }>>({});
   const [tileGroups, setTileGroups] = useState<Record<string, { name: string; tiles: string[]; priority: number }>>({});
   const [selectedLight, setSelectedLight] = useState<string | null>(null);
   const [lightConfig, setLightConfig] = useState({
@@ -2220,7 +2220,7 @@ export default function App() {
                     <button onClick={() => setConfig({ ...config, selectedTile: id })} className={`w-full aspect-square rounded border-2 transition-all overflow-hidden ${config.selectedTile === id ? 'border-accent scale-105 shadow-lg shadow-accent/20' : 'border-transparent hover:border-gray-600'}`}>
                       <img src={url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     </button>
-                    <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute inset-0 bg-black/60 rounded flex flex-wrap content-center justify-center gap-1 p-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
                       <button 
                         onClick={() => {
                           const currentPrio = tileMetadata[id]?.priority ?? 1;
@@ -2254,6 +2254,18 @@ export default function App() {
                         title="Alternar Movimiento del Viento"
                       >
                         <Wind size={10} />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setTileMetadata(prev => ({ 
+                            ...prev, 
+                            [id]: { ...prev[id], isWall: !prev[id]?.isWall } 
+                          }));
+                        }}
+                        className={`rounded-full p-0.5 text-white ${tileMetadata[id]?.isWall ? 'bg-red-600' : 'bg-gray-500'}`}
+                        title="Marcar como Muro (Bloquea el paso en el juego)"
+                      >
+                        <Square size={10} />
                       </button>
                       <button 
                         onClick={() => transformSprite(id, 'rotate')}
