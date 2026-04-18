@@ -1,1 +1,128 @@
 @import "tailwindcss";
+
+:root {
+  --glass-bg: rgba(15, 15, 15, 0.6);
+  --glass-border: rgba(245, 158, 11, 0.3);
+  --glass-blur: blur(12px);
+  --amber-premium: #f59e0b;
+  --stone-dark: #1c1917;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--stone-dark);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Premium Ghost HUD */
+.hud-element {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hud-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+}
+
+.hud-button:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: var(--amber-premium);
+  transform: translateY(-2px);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+}
+
+.hud-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.hud-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.resource-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* Specific button styles */
+.btn-worker-active {
+  background: var(--amber-premium) !important;
+  color: #000 !important;
+  font-weight: 900;
+}
+
+.btn-build {
+  width: 64px;
+  height: 64px;
+}
+
+/* Animations */
+@keyframes pulse-soft {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s infinite ease-in-out;
+}
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-editor-bg: #1a1a1a;
+  --color-sidebar-bg: #252526;
+  --color-viewport-bg: #111111;
+  --color-accent: #00aaff;
+  --color-accent-hover: #0088cc;
+  --color-border: #333333;
+}
+
+@layer base {
+  body {
+    @apply bg-editor-bg text-gray-200 font-sans overflow-hidden;
+  }
+}
+
+/* Custom scrollbar for the dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}

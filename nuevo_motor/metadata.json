@@ -1,0 +1,5 @@
+{
+  "name": "StarCraft World Generator",
+  "description": "A professional-grade map editor with autotiling, layered rendering, and smart shadows for classic game environments.",
+  "requestFramePermissions": []
+}

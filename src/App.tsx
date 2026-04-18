@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import EditorMain from './editor/EditorMain';
 
 // Game constants
 const WORLD_WIDTH = 2400;
@@ -29,7 +30,7 @@ interface Tree extends Point {
 }
 
 type GameMode = 'GATHER' | 'PLANT' | 'IDLE' | 'HUNT' | 'ATTACK_WORKERS' | 'ATTACK_BUILDINGS' | 'ATTACK_SOLDIERS';
-type ViewState = 'TITLE' | 'MAP' | 'PLAYING' | 'LOBBY';
+type ViewState = 'TITLE' | 'MAP' | 'PLAYING' | 'LOBBY' | 'ADMIN';
 
 const NAMES = ['Juan', 'Antonio', 'Carlos', 'David', 'Elena', 'Paco', 'Lucia', 'Maria', 'Pepe', 'Luis', 'Marcos', 'Sofia', 'Hugo', 'Lola', 'Rafa'];
 type WorkerConfig = { id: number, name: string, mode: GameMode, role: 'WOOD' | 'MEAT' | 'SOLDIER' };
@@ -128,7 +129,7 @@ export default function App() {
   const lastMousePosRef = useRef({ x: 0, y: 0 });
   const [gameState, setGameState] = useState<ViewState>('TITLE');
   const [currentPhase, setCurrentPhase] = useState(1);
-  const [maxUnlockedPhase, setMaxUnlockedPhase] = useState(1);
+  const [maxUnlockedPhase, setMaxUnlockedPhase] = useState(6);
   const [wood, setWood] = useState(0);
   const [aiWood, setAiWood] = useState(0);
   const [meat, setMeat] = useState(0);
@@ -2662,6 +2663,22 @@ export default function App() {
     };
   }, [gameState, currentPhase]);
 
+  if (gameState === 'ADMIN') {
+    return (
+      <div className="absolute inset-0 z-[9999] bg-stone-900 overflow-hidden flex flex-col">
+        <div className="absolute top-4 right-4 z-50">
+          <button 
+            onClick={() => setGameState('TITLE')}
+            className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg shadow-lg hover:bg-red-500 hover:scale-105 transition-all"
+          >
+            Cerrar Administrador
+          </button>
+        </div>
+        <EditorMain />
+      </div>
+    );
+  }
+
   if (gameState === 'TITLE') {
     return (
       <div 
@@ -2702,6 +2719,14 @@ export default function App() {
             >
               <span className="text-xl font-black italic tracking-widest uppercase mb-0.5">Multijugador</span>
               <span className="text-stone-500 text-[9px] font-bold font-mono tracking-widest uppercase">Entrar al Lobby</span>
+            </button>
+
+            <button 
+              onClick={() => setGameState('ADMIN')}
+              className="group relative px-6 py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl border-b-4 border-purple-800 active:border-b-0 active:translate-y-1 transition-all flex flex-col items-center mt-2 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+            >
+              <span className="text-lg font-black italic tracking-widest uppercase mb-0.5">⚙️ Administrador</span>
+              <span className="text-purple-200 text-[9px] font-bold font-mono tracking-widest uppercase">Motor de Mapas</span>
             </button>
             
             <div className="mt-16 flex flex-col items-center opacity-40">
@@ -2986,7 +3011,7 @@ export default function App() {
       style={{ height: '100dvh', width: '100vw', margin: 0, padding: 0 }}
     >
       
-      {/* Top Game View */}
+      {/* Main Game Frame */}
       <div className="flex-1 relative flex overflow-hidden bg-[#e1d4b7] min-h-0">
         <canvas
           ref={canvasRef}
@@ -3054,7 +3079,6 @@ export default function App() {
               } else {
                 // Placement Logic
                 const id = nextBuildingIdRef.current++;
-                const charId = nextCharIdRef.current++;
                 if (editorTool === 'TREE') treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 3, state: 'GROWN', owner: 'PLAYER' });
                 else if (editorTool === 'TREE_BORDER') treesRef.current.push({ id: nextTreeIdRef.current++, x: wx, y: wy, wood: 0, state: 'GROWN', owner: 'BORDER' });
                 else if (editorTool === 'BOAR') wildBoarsRef.current.push({ x: wx, y: wy, state: 'IDLE', target: null, timer: 0, hp: 1, wobblePhase: Math.random() * Math.PI*2, wobbleSpeed: 0.05, angle: 0 });
@@ -3260,17 +3284,188 @@ export default function App() {
             
             targetCameraRef.current.zoom = newZoom;
           }}
-          className={`w-full h-full bg-[#e1d4b7] ${isAdminMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'} border-b-4 border-amber-700`}
+          className={`w-full h-full bg-[#e1d4b7] ${isAdminMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
           style={{ display: 'block', touchAction: 'none' }}
         />
 
+        {/* --- FLOATING HUD ELEMENTS --- */}
 
+        {/* 1. Resources Bar (Top Center) */}
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+          <div className="hud-element px-6 py-3 flex items-center gap-8 shadow-2xl">
+            <div className="resource-item text-xl">🪵 <span className="text-amber-500">{Math.floor(wood)}</span></div>
+            <div className="resource-item text-xl">🥩 <span className="text-red-500">{Math.floor(meat)}</span></div>
+            {currentPhase >= 4 && <div className="resource-item text-xl">💰 <span className="text-yellow-400">{Math.floor(gold)}</span></div>}
+          </div>
+        </div>
+
+        {/* 2. Phase Badge (Top Left) */}
+        <div className="absolute top-6 left-6 z-30 pointer-events-none">
+           <div className="hud-element px-4 py-2 flex flex-col items-start border-l-4 border-l-amber-500">
+              <span className="text-[10px] font-black text-amber-500/70 tracking-widest uppercase mb-0.5">Phase {currentPhase}</span>
+              <span className="text-sm font-black text-white italic tracking-tight uppercase">
+                {currentPhase === 1 ? 'La Tala' : currentPhase === 2 ? 'La Aldea' : currentPhase === 3 ? 'La Caza' : currentPhase === 4 ? 'El Comercio' : currentPhase === 5 ? 'El Fuerte' : 'Gran Batalla'}
+              </span>
+           </div>
+        </div>
+
+        {/* 3. Workers Controls (LEFT) */}
+        <div className="absolute left-6 top-[20%] z-30 flex flex-col gap-6 max-h-[70vh] overflow-y-auto no-scrollbar pr-2">
+          {['WOOD', 'MEAT', 'SOLDIER'].map(role => {
+            const roleWorkers = workers.filter(w => w.role === role);
+            if (roleWorkers.length === 0 && role !== 'WOOD') return null;
+
+            const icon = role === 'WOOD' ? '🪓' : role === 'MEAT' ? '🥩' : '⚔️';
+            const colorClass = role === 'WOOD' ? 'text-amber-500' : role === 'MEAT' ? 'text-red-500' : 'text-blue-400';
+
+            return (
+              <div key={role} className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-xl ${colorClass}`}>{icon}</span>
+                  <span className="text-[10px] font-black text-white/50 tracking-[0.2em] uppercase">{role}S</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {roleWorkers.map(w => (
+                    <div key={w.id} className="hud-element p-2 flex flex-col gap-2 min-w-[120px] hover:border-amber-500 transition-colors">
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-[11px] font-black text-stone-200 truncate max-w-[80px]">{w.name}</span>
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+                      </div>
+                      <div className="flex gap-1">
+                        {w.role === 'WOOD' && (
+                          <>
+                            <button onClick={() => setWorkers(prev => prev.map(item => item.id === w.id ? { ...item, mode: 'GATHER' } : item))} className={`flex-1 p-1 rounded text-[10px] font-bold transition-all ${w.mode === 'GATHER' ? 'bg-amber-500 text-black' : 'bg-white/5 hover:bg-white/10'}`}>Talar</button>
+                            <button onClick={() => setWorkers(prev => prev.map(item => item.id === w.id ? { ...item, mode: 'PLANT' } : item))} className={`flex-1 p-1 rounded text-[10px] font-bold transition-all ${w.mode === 'PLANT' ? 'bg-emerald-500 text-black' : 'bg-white/5 hover:bg-white/10'}`}>Plant</button>
+                          </>
+                        )}
+                        {w.role === 'MEAT' && (
+                          <button onClick={() => setWorkers(prev => prev.map(item => item.id === w.id ? { ...item, mode: 'HUNT' } : item))} className={`flex-1 p-1 rounded text-[10px] font-bold transition-all ${w.mode === 'HUNT' ? 'bg-red-600 text-white' : 'bg-white/5 hover:bg-white/10'}`}>Cazar</button>
+                        )}
+                        {w.role === 'SOLDIER' && (
+                          <button onClick={() => setWorkers(prev => prev.map(item => item.id === w.id ? { ...item, mode: 'ATTACK_SOLDIERS' } : item))} className={`flex-1 p-1 rounded text-[10px] font-bold transition-all ${w.mode === 'ATTACK_SOLDIERS' ? 'bg-blue-600 text-white' : 'bg-white/5 hover:bg-white/10'}`}>Atacar</button>
+                        )}
+                        <button onClick={() => setWorkers(prev => prev.map(item => item.id === w.id ? { ...item, mode: 'IDLE' } : item))} className={`p-1 w-6 rounded text-[10px] font-bold transition-all ${w.mode === 'IDLE' ? 'bg-white text-black' : 'bg-white/5 hover:bg-white/10'}`}>Zz</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 4. Construction & Shop Controls (RIGHT) */}
+        <div className="absolute right-6 top-[20%] z-30 flex flex-col gap-8">
+           {/* Section Label */}
+           <div className="flex items-center gap-2 justify-end">
+              <span className="text-[10px] font-black text-white/50 tracking-[0.2em] uppercase">BUILDING</span>
+              <span className="text-xl text-amber-500">🏗️</span>
+           </div>
+
+           <div className="grid grid-cols-2 gap-3">
+              {/* Row 1: Buildings */}
+              {currentPhase >= 2 && (
+                <button 
+                  onClick={() => { const cost = 25 * Math.pow(2, playerHouseCount - 1); if (wood >= cost) buildHouseRef.current++; }}
+                  disabled={wood < (25 * Math.pow(2, playerHouseCount - 1))}
+                  className="hud-button btn-build group"
+                >
+                  <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">🏠</span>
+                  <span className="text-[9px] font-black text-amber-400">{Math.floor(25 * Math.pow(2, playerHouseCount - 1))}</span>
+                </button>
+              )}
+
+              {currentPhase >= 3 && (
+                <button 
+                  onClick={() => { const cost = 25 * Math.pow(2, butcherShopCount); if (wood >= cost) buildButcherShopRef.current++; }}
+                  disabled={wood < (25 * Math.pow(2, butcherShopCount))}
+                  className="hud-button btn-build group"
+                >
+                  <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">🍗</span>
+                  <span className="text-[9px] font-black text-amber-400">{Math.floor(25 * Math.pow(2, butcherShopCount))}</span>
+                </button>
+              )}
+
+              {currentPhase >= 5 && (
+                <>
+                  <button 
+                    onClick={() => { const cost = 50 * Math.pow(2, fortCount); if (wood >= cost && meat >= cost) buildFortRef.current++; }}
+                    disabled={wood < (50 * Math.pow(2, fortCount)) || meat < (50 * Math.pow(2, fortCount)) || fortCount >= 1}
+                    className="hud-button btn-build group"
+                  >
+                    <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">🏰</span>
+                    <span className="text-[9px] font-black text-amber-400">{50 * Math.pow(2, fortCount)}</span>
+                  </button>
+                  <button 
+                    onClick={() => wood >= 50 && setIsPlacingTower(!isPlacingTower)}
+                    disabled={wood < 50}
+                    className={`hud-button btn-build group ${isPlacingTower ? 'border-amber-500 !bg-amber-500/20' : ''}`}
+                  >
+                    <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">🏹</span>
+                    <span className="text-[9px] font-black text-amber-400">50</span>
+                  </button>
+                </>
+              )}
+           </div>
+
+           <div className="h-px bg-white/10 w-full" />
+
+           {/* Military & Special */}
+           <div className="grid grid-cols-2 gap-3">
+              {currentPhase >= 5 && (
+                <button 
+                  onClick={() => { const cost = activeCards.some(c=>c.id==='mercenary')?25:50; if (meat >= cost) buildSoldierRef.current++; }}
+                  disabled={(activeCards.some(c=>c.id==='mercenary')?meat<25:meat<50) || fortCount === 0}
+                  className="hud-button btn-build group bg-blue-900/10"
+                >
+                  <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">⚔️</span>
+                  <span className="text-[9px] font-black text-blue-400">{activeCards.some(c=>c.id==='mercenary')?25:50}</span>
+                </button>
+              )}
+
+              {currentPhase >= 4 && (
+                <>
+                  <button 
+                    onClick={() => { if (wood >= 150 && meat >= 50) buildMarketRef.current++; }}
+                    disabled={wood < 150 || meat < 50 || marketCount >= 1}
+                    className="hud-button btn-build group"
+                  >
+                    <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">🏪</span>
+                    <span className="text-[9px] font-black text-amber-400">150/50</span>
+                  </button>
+                  <button 
+                    onClick={() => marketCount > 0 && setMarketOpen(!marketOpen)}
+                    disabled={marketCount === 0}
+                    className={`hud-button btn-build group ${marketOpen ? 'border-yellow-500 !bg-yellow-500/20' : 'animate-pulse-soft'}`}
+                  >
+                    <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">✨</span>
+                    <span className="text-[9px] font-black text-yellow-400 uppercase">TIENDA</span>
+                  </button>
+                </>
+              )}
+           </div>
+
+           {/* Rest Threshold Control */}
+           <div className="hud-element p-3 flex flex-col gap-2">
+              <div className="flex justify-between items-center px-1">
+                 <span className="text-[9px] font-black text-white/50 uppercase tracking-widest">休息 Auto</span>
+                 <span className="text-[10px] font-black text-amber-500">{restThreshold}%</span>
+              </div>
+              <input 
+                type="range" min="0" max="100" value={restThreshold} 
+                onChange={(e) => setRestThreshold(Number(e.target.value))}
+                className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              />
+           </div>
+        </div>
+
+        {/* --- MODALS & OVERLAYS --- */}
         
         {/* Tutorial Overlay */}
         {showTutorial && PHASE_TUTORIAL[currentPhase] && (
-          <div className="absolute inset-0 bg-black/75 flex items-center justify-center z-40 backdrop-blur-sm">
-            <div className="bg-stone-900 border-2 border-amber-500 rounded-2xl p-8 max-w-lg w-full mx-4 shadow-[0_0_60px_rgba(245,158,11,0.3)]">
-              <h2 className="text-3xl font-black text-amber-400 mb-1 tracking-tight">{PHASE_TUTORIAL[currentPhase].title}</h2>
+          <div className="absolute inset-0 bg-black/75 flex items-center justify-center z-50 backdrop-blur-sm px-4">
+            <div className="hud-element p-8 max-w-lg w-full shadow-[0_0_60px_rgba(245,158,11,0.2)]">
+              <h2 className="text-3xl font-black text-amber-400 mb-1 tracking-tight uppercase italic">{PHASE_TUTORIAL[currentPhase].title}</h2>
               <div className="w-16 h-1 bg-amber-500 rounded mb-5" />
               <ul className="space-y-3 mb-6">
                 {PHASE_TUTORIAL[currentPhase].steps.map((step, i) => (
@@ -3280,451 +3475,147 @@ export default function App() {
                   </li>
                 ))}
               </ul>
-              <div className="bg-amber-950/50 border border-amber-700/50 rounded-lg p-3 mb-6">
-                <p className="text-amber-300 font-bold text-sm">{PHASE_TUTORIAL[currentPhase].goal}</p>
+              <div className="bg-amber-950/20 border border-amber-700/30 rounded-lg p-3 mb-6">
+                <p className="text-amber-300 font-bold text-sm tracking-tight">{PHASE_TUTORIAL[currentPhase].goal}</p>
               </div>
               <button
                 onClick={() => setShowTutorial(false)}
-                className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-amber-950 font-black text-lg rounded-xl transition-colors tracking-wide"
+                className="w-full py-4 bg-amber-500 hover:bg-amber-400 text-amber-950 font-black text-lg rounded-xl transition-all shadow-xl uppercase italic tracking-widest"
               >
-                ¡Entendido! →
+                ¡A la batalla! →
               </button>
             </div>
           </div>
         )}
 
-        {/* Market Shop Modal */}
+        {/* Market Shop Overlay (Side Panel Style) */}
         {marketOpen && currentPhase >= 4 && (
-          <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-40 backdrop-blur-sm">
-            <div className="bg-stone-900 border-2 border-yellow-500 rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-[0_0_60px_rgba(234,179,8,0.3)] max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-black text-yellow-400">🏪 Tienda del Mercader</h2>
-                <div className="flex items-center gap-3">
-                  <span className="text-yellow-300 font-black text-lg">💰 {gold} oro</span>
-                  <button onClick={() => setMarketOpen(false)} className="text-stone-400 hover:text-white text-2xl font-bold">×</button>
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-end z-40 backdrop-blur-xs">
+            <div className="hud-element h-full w-full max-w-md border-l-2 border-amber-500/50 rounded-none md:rounded-l-3xl p-8 flex flex-col gap-6 shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-y-auto">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex flex-col">
+                   <h2 className="text-3xl font-black text-yellow-400 uppercase italic leading-none">Market</h2>
+                   <span className="text-[10px] font-black text-yellow-600/70 tracking-[0.3em] uppercase">Upgrade & Trade</span>
                 </div>
+                <button onClick={() => setMarketOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-red-500/20 text-stone-400 hover:text-white transition-all text-2xl font-bold">×</button>
+              </div>
+
+              <div className="hud-element p-4 flex justify-between items-center bg-yellow-500/10">
+                 <span className="text-stone-300 font-bold uppercase tracking-widest text-xs">Current Gold</span>
+                 <span className="text-2xl font-black text-yellow-400">💰 {gold}</span>
               </div>
 
               {/* Exchange section */}
-              <div className="bg-stone-800 rounded-xl p-4 mb-5">
-                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-3">Intercambio de recursos</p>
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={() => { if (wood >= 10) { setWood(w => w - 10); currentWoodRef.current -= 10; const bonus = activeCards.some(c => c.id === 'trade_net') ? 2 : 1; setGold(g => g + bonus); currentGoldRef.current += bonus; } }}
-                    disabled={wood < 10}
-                    className="px-3 py-2 bg-amber-800 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-bold text-amber-200 transition-colors"
-                  >
-                    10 🪵 → {activeCards.some(c => c.id === 'trade_net') ? 2 : 1} 💰
+              <div className="flex flex-col gap-2">
+                <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mb-1">Stock exchange</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => { if (wood >= 10) { setWood(w => w - 10); currentWoodRef.current -= 10; const bonus = activeCards.some(c => c.id === 'trade_net') ? 2 : 1; setGold(g => g + bonus); currentGoldRef.current += bonus; } }} disabled={wood < 10} className="hud-button !flex-row gap-3 py-3">
+                    <span className="text-xs">10 🪵</span><span className="text-yellow-400">→</span><span className="text-xs">{activeCards.some(c => c.id === 'trade_net') ? 2 : 1} 💰</span>
                   </button>
-                  <button
-                    onClick={() => { if (wood >= 50) { setWood(w => w - 50); currentWoodRef.current -= 50; const bonus = activeCards.some(c => c.id === 'trade_net') ? 8 : 5; setGold(g => g + bonus); currentGoldRef.current += bonus; } }}
-                    disabled={wood < 50}
-                    className="px-3 py-2 bg-amber-800 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-bold text-amber-200 transition-colors"
-                  >
-                    50 🪵 → {activeCards.some(c => c.id === 'trade_net') ? 8 : 5} 💰
-                  </button>
-                  <button
-                    onClick={() => { if (meat >= 5) { setMeat(m => m - 5); currentMeatRef.current -= 5; const bonus = activeCards.some(c => c.id === 'trade_net') ? 2 : 1; setGold(g => g + bonus); currentGoldRef.current += bonus; } }}
-                    disabled={meat < 5}
-                    className="px-3 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-bold text-red-200 transition-colors"
-                  >
-                    5 🥩 → {activeCards.some(c => c.id === 'trade_net') ? 2 : 1} 💰
-                  </button>
-                  <button
-                    onClick={() => { if (meat >= 20) { setMeat(m => m - 20); currentMeatRef.current -= 20; const bonus = activeCards.some(c => c.id === 'trade_net') ? 6 : 4; setGold(g => g + bonus); currentGoldRef.current += bonus; } }}
-                    disabled={meat < 20}
-                    className="px-3 py-2 bg-red-900 hover:bg-red-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-bold text-red-200 transition-colors"
-                  >
-                    20 🥩 → {activeCards.some(c => c.id === 'trade_net') ? 6 : 4} 💰
+                  <button onClick={() => { if (meat >= 5) { setMeat(m => m - 5); currentMeatRef.current -= 5; const bonus = activeCards.some(c => c.id === 'trade_net') ? 2 : 1; setGold(g => g + bonus); currentGoldRef.current += bonus; } }} disabled={meat < 5} className="hud-button !flex-row gap-3 py-3">
+                    <span className="text-xs">5 🥩</span><span className="text-yellow-400">→</span><span className="text-xs">{activeCards.some(c=>c.id==='trade_net')?2:1} 💰</span>
                   </button>
                 </div>
               </div>
 
               {/* Cards in deck */}
-              <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-3">Cartas disponibles ({deck.length} restantes)</p>
-              {deck.length === 0 ? (
-                <p className="text-stone-500 text-sm italic">No quedan cartas en el mazo.</p>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 mb-5">
-                  {deck.map((card) => (
-                    <div key={card.id} className="rounded-xl border-2 border-yellow-500 bg-yellow-950/40 p-4 flex flex-col gap-2 transition-all">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{card.icon}</span>
-                        <span className="font-black text-sm text-white">{card.name}</span>
-                      </div>
-                      <p className="text-xs text-stone-300 leading-relaxed flex-1">{card.effect}</p>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-yellow-400 font-black text-sm">💰 {card.cost} oro</span>
-                        <button
-                          onClick={() => {
-                            if (gold >= card.cost) {
-                              setGold(g => g - card.cost);
-                              currentGoldRef.current -= card.cost;
-                              setActiveCards(prev => [...prev, card]);
-                              setDeck(prev => prev.filter(c => c.id !== card.id));
-                            }
-                          }}
-                          disabled={gold < card.cost}
-                          className="px-3 py-1 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed text-yellow-950 font-black text-xs rounded-lg transition-colors"
-                        >
-                          Comprar
-                        </button>
+              <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mb-1">Upgrades Available ({deck.length})</p>
+              <div className="flex flex-col gap-3">
+                {deck.slice(0, 4).map((card) => (
+                  <div key={card.id} className="hud-element p-4 flex flex-col gap-3 border-stone-800 hover:border-yellow-500/30 transition-all bg-white/2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">{card.icon}</span>
+                      <div className="flex flex-col">
+                        <span className="font-black text-sm text-white uppercase italic">{card.name}</span>
+                        <p className="text-[10px] text-stone-400 leading-tight">{card.effect}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
+                      <span className="text-yellow-400 font-black text-sm">💰 {card.cost} Gold</span>
+                      <button
+                        onClick={() => { if (gold >= card.cost) { setGold(g => g - card.cost); currentGoldRef.current -= card.cost; setActiveCards(prev => [...prev, card]); setDeck(prev => prev.filter(c => c.id !== card.id)); } }}
+                        disabled={gold < card.cost}
+                        className="px-4 py-1.5 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-30 text-yellow-950 font-black text-xs rounded-lg transition-all"
+                      >
+                        PURCHASE
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
               {/* Active cards */}
               {activeCards.length > 0 && (
-                <>
-                  <p className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-3">Cartas activas ({activeCards.length}/3 para ganar)</p>
+                <div className="mt-auto pt-6">
+                  <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-3">Active Perks ({activeCards.length})</p>
                   <div className="flex flex-wrap gap-2">
                     {activeCards.map(card => (
-                      <div key={card.id} className="flex items-center gap-2 bg-emerald-950/50 border border-emerald-700 rounded-lg px-3 py-2">
-                        <span>{card.icon}</span>
-                        <span className="text-xs font-bold text-emerald-300">{card.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Game Over Overlays */}
-        {gameOver === "VICTORY_PHASE_1" && (
-          <div className="absolute inset-0 bg-amber-500/80 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50">
-            <h2 className="text-7xl font-black mb-4 tracking-tighter uppercase italic drop-shadow-xl text-yellow-100">¡Hilas fino talando!</h2>
-            <p className="text-2xl font-bold mb-12 max-w-md drop-shadow-md">Has conseguido 25 de madera superando la fase 1.</p>
-            <button 
-              onClick={() => {
-                setMaxUnlockedPhase(Math.max(maxUnlockedPhase, 2));
-                setGameState('MAP');
-              }}
-              className="px-12 py-5 bg-white text-amber-600 font-black text-xl uppercase italic rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.8)]"
-            >
-              Volver al Mapa
-            </button>
-          </div>
-        )}
-        {gameOver === "VICTORY_PHASE_2" && (
-          <div className="absolute inset-0 bg-sky-500/80 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50">
-            <h2 className="text-7xl font-black mb-4 tracking-tighter uppercase italic drop-shadow-xl text-sky-100">¡Crece la Aldea!</h2>
-            <p className="text-2xl font-bold mb-12 max-w-md drop-shadow-md">Has construido tu segunda casa y tienes una aldea de 4 trabajadores superando la fase 2.</p>
-            <button 
-              onClick={() => {
-                setMaxUnlockedPhase(Math.max(maxUnlockedPhase, 3));
-                setGameState('MAP');
-              }}
-              className="px-12 py-5 bg-white text-sky-600 font-black text-xl uppercase italic rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.8)]"
-            >
-              Volver al Mapa
-            </button>
-          </div>
-        )}
-        {gameOver === "VICTORY_PHASE_3" && (
-          <div className="absolute inset-0 bg-red-800/80 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50">
-            <h2 className="text-7xl font-black mb-4 tracking-tighter uppercase italic drop-shadow-xl text-red-100">¡Primera Sangre!</h2>
-            <p className="text-2xl font-bold mb-12 max-w-md drop-shadow-md">Nuestros aldeanos tendrán un buen banquete esta noche superando la fase 3.</p>
-            <button 
-              onClick={() => {
-                setMaxUnlockedPhase(Math.max(maxUnlockedPhase, 4));
-                setGameState('MAP');
-              }}
-              className="px-12 py-5 bg-white text-red-800 font-black text-xl uppercase italic rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.8)]"
-            >
-              Volver al Mapa
-            </button>
-          </div>
-        )}
-        {gameOver === "VICTORY_PHASE_4" && (
-          <div className="absolute inset-0 bg-yellow-600/80 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50">
-            <h2 className="text-7xl font-black mb-4 tracking-tighter uppercase italic drop-shadow-xl text-yellow-100">¡El Mercader Sonríe!</h2>
-            <p className="text-2xl font-bold mb-4 max-w-md drop-shadow-md">Has adquirido 3 Cartas de Mejora y tu aldea prospera más que nunca.</p>
-            <div className="flex gap-3 mb-12">
-              {activeCards.map(c => <span key={c.id} className="text-4xl">{c.icon}</span>)}
-            </div>
-            <button 
-              onClick={() => {
-                setMaxUnlockedPhase(Math.max(maxUnlockedPhase, 5));
-                setGameState('MAP');
-              }}
-              className="px-12 py-5 bg-white text-yellow-700 font-black text-xl uppercase italic rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.8)]"
-            >
-              Siguiente Fase →
-            </button>
-          </div>
-        )}
-        {gameOver === "VICTORY_PHASE_5" && (
-          <div className="absolute inset-0 bg-indigo-600/80 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50">
-            <h2 className="text-7xl font-black mb-4 tracking-tighter uppercase italic drop-shadow-xl text-indigo-100">¡Fortaleza Erigida!</h2>
-            <p className="text-2xl font-bold mb-12 max-w-md drop-shadow-md">Has establecido un fuerte y entrenado a tu primer soldado. El enemigo ahora sabe que no estamos solos.</p>
-            <button 
-              onClick={() => {
-                setMaxUnlockedPhase(Math.max(maxUnlockedPhase, 6)); // Unlock Phase 6 if exists
-                setGameState('MAP');
-              }}
-              className="px-12 py-5 bg-white text-indigo-700 font-black text-xl uppercase italic rounded-full hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.8)]"
-            >
-              ¡A la Batalla! →
-            </button>
-          </div>
-        )}
-        {gameOver === "VICTORY_PHASE_6" && (
-          <div className="absolute inset-0 bg-stone-900 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50 overflow-hidden">
-            <h2 className="text-5xl md:text-8xl font-black mb-6 tracking-tighter uppercase italic drop-shadow-2xl text-amber-500 animate-bounce">¡CONQUISTA TOTAL!</h2>
-            <div className="w-32 h-2 bg-amber-600 rounded-full mb-8 shadow-[0_0_20px_rgba(245,158,11,0.5)]" />
-            <p className="text-xl md:text-3xl font-bold mb-12 max-w-2xl drop-shadow-md leading-tight text-stone-300">
-              Has derrotado a la máquina y unificado las tierras boscosas bajo tu mando. 
-              <br/><span className="text-amber-400 mt-4 block">¡Eres el Wood Gatherer definitivo!</span>
-            </p>
-            <div className="flex flex-col md:flex-row gap-6">
-              <button 
-                onClick={() => { setGameState('TITLE'); }}
-                className="px-12 py-5 bg-amber-600 text-white font-black text-xl uppercase italic rounded-2xl hover:bg-amber-500 hover:scale-105 transition-all shadow-xl"
-              >
-                Menú Principal
-              </button>
-              <button 
-                onClick={() => { setGameState('MAP'); }}
-                className="px-12 py-5 bg-stone-800 text-stone-300 font-black text-xl uppercase italic rounded-2xl hover:bg-stone-700 hover:scale-105 transition-all shadow-xl"
-              >
-                Volver al Mapa
-              </button>
-            </div>
-          </div>
-        )}
-        {gameOver && gameOver !== "VICTORY_PHASE_1" && gameOver !== "VICTORY_PHASE_2" && gameOver !== "VICTORY_PHASE_3" && gameOver !== "VICTORY_PHASE_4" && (
-          <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-50">
-            <h2 className="text-5xl font-black mb-4 tracking-tighter uppercase italic drop-shadow-lg">Fin de la Partida</h2>
-            <p className="text-2xl font-bold mb-8 max-w-md drop-shadow-md">{gameOver}</p>
-            <button 
-              onClick={() => { setGameState('MAP'); }}
-              className="px-10 py-4 bg-white text-black font-black uppercase italic rounded-full hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.4)]"
-            >
-              Volver al Menú
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Bottom HUD */}
-      <div className="md:h-56 shrink-0 bg-stone-800 border-t-4 border-amber-700 flex flex-col md:flex-row text-stone-200 overflow-y-auto md:overflow-hidden max-h-[50vh] md:max-h-none">
-        
-        {/* Left Column: Resources & Info */}
-        <div className="w-full md:w-1/4 p-4 md:border-r-2 border-b-2 md:border-b-0 border-stone-700 flex flex-col overflow-y-auto touch-pan-y shrink-0 md:shrink">
-          <h2 className="text-xl font-black text-amber-500 mb-2 tracking-wider">
-            {currentPhase === 1 ? 'FASE 1: LA TALA' : currentPhase === 2 ? 'FASE 2: LA ALDEA' : currentPhase === 3 ? 'FASE 3: LA CAZA' : currentPhase === 4 ? 'FASE 4: EL COMERCIO' : currentPhase === 5 ? 'FASE 5: EL FUERTE' : 'FASE 6: LA GRAN BATALLA'}
-          </h2>
-          
-          <div className="flex flex-col gap-2">
-            <div className="bg-stone-900/50 p-2 rounded">
-              <p className="text-[10px] text-stone-400 uppercase font-bold tracking-wider mb-1">Tu Imperio</p>
-              <div className="grid grid-cols-2 gap-1 text-sm font-bold">
-                <span className="text-amber-600">Madera: {Math.floor(wood)}</span>
-                <span className="text-red-400">Carne: {Math.floor(meat)}</span>
-                {currentPhase >= 4 && <span className="text-yellow-400 col-span-2">💰 Oro: {Math.floor(gold)}</span>}
-                <span className="text-slate-400">Fuertes: {fortCount}</span>
-                <span className="text-blue-400">Soldados: {soldierCount}</span>
-                {currentPhase >= 5 && <span className="text-stone-400">Torres: {towerCount}</span>}
-              </div>
-            </div>
-
-            {/* Tutorial reminder button */}
-            <button
-              onClick={() => setShowTutorial(true)}
-              className="text-[9px] text-stone-500 hover:text-amber-400 text-left transition-colors"
-            >
-              ❓ Ver instrucciones de la fase
-            </button>
-            
-            {currentPhase > 4 && (
-              <div className="bg-red-950/20 p-2 rounded border border-red-900/30">
-                <p className="text-[10px] text-red-500/70 uppercase font-bold tracking-wider mb-1">Ordenador</p>
-                <div className="grid grid-cols-2 gap-1 text-xs text-stone-400">
-                  <span>Madera: {aiWood}</span>
-                  <span>Carne: {aiMeat}</span>
-                  <span>Fuertes: {aiFortCount}</span>
-                  <span>Soldados: {aiSoldierCount}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Middle Column: Workers Control */}
-        <div className="flex-1 p-4 md:border-r-2 border-b-2 md:border-b-0 border-stone-700 flex flex-col overflow-y-auto touch-pan-y md:overflow-hidden min-h-[200px] md:min-h-0 shrink-0 md:shrink">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 shrink-0 gap-2">
-            <h3 className="text-xs font-bold text-amber-500 uppercase tracking-widest">Trabajadores ({workers.length})</h3>
-            <div className="flex gap-1">
-              <button title="Todos: Atacar Soldados" onClick={() => setWorkers(prev => prev.map(w => w.role === 'SOLDIER' ? { ...w, mode: 'ATTACK_SOLDIERS' } : w))} className="px-2 py-1 text-[10px] font-bold bg-blue-900 border border-blue-700 hover:bg-blue-800 rounded">Sold.</button>
-              <button title="Todos: Atacar Trabajadores" onClick={() => setWorkers(prev => prev.map(w => w.role === 'SOLDIER' ? { ...w, mode: 'ATTACK_WORKERS' } : w))} className="px-2 py-1 text-[10px] font-bold bg-red-900 border border-red-700 hover:bg-red-800 rounded">Trab.</button>
-              <button title="Todos: Atacar Edificios" onClick={() => setWorkers(prev => prev.map(w => w.role === 'SOLDIER' ? { ...w, mode: 'ATTACK_BUILDINGS' } : w))} className="px-2 py-1 text-[10px] font-bold bg-orange-900 border border-orange-700 hover:bg-orange-800 rounded">Edif.</button>
-              <button title="Todos: Descansar" onClick={() => setWorkers(prev => prev.map(w => w.role === 'SOLDIER' ? { ...w, mode: 'IDLE' } : w))} className="px-2 py-1 text-[10px] font-bold bg-stone-700 border border-stone-500 hover:bg-stone-600 rounded">Desc.</button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto touch-pan-y pr-2 flex flex-col gap-3">
-            {['WOOD', 'MEAT', 'SOLDIER'].map(role => {
-              const groupWorkers = workers.filter(w => w.role === role);
-              if (groupWorkers.length === 0) return null;
-              
-              const roleName = role === 'WOOD' ? 'Leñadores' : role === 'MEAT' ? 'Cazadores' : 'Soldados';
-              const badgeColor = role === 'WOOD' ? 'bg-amber-900/50 text-amber-500 border-amber-700/50' : role === 'MEAT' ? 'bg-red-900/50 text-red-500 border-red-700/50' : 'bg-blue-900/50 text-blue-400 border-blue-700/50';
-
-              return (
-                <div key={role} className="flex flex-col gap-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[11px] uppercase font-black border ${badgeColor}`}>
-                      {roleName} ({groupWorkers.length})
-                    </span>
-                    <div className="h-px bg-stone-700 flex-1"></div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {groupWorkers.map(worker => (
-                      <div key={worker.id} className="flex flex-col bg-stone-900 p-1.5 rounded border border-stone-700 min-w-[125px] shadow-sm">
-                        <div className="flex justify-between items-center mb-1.5">
-                          <span className="font-bold text-[13px] text-stone-200 truncate max-w-[90px]">{worker.name}</span>
-                        </div>
-                        <div className="flex gap-1 justify-start">
-                          {worker.role === 'WOOD' && (
-                            <>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'GATHER' } : w))} className={`px-2 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'GATHER' ? 'bg-amber-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Talar</button>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'PLANT' } : w))} className={`px-2 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'PLANT' ? 'bg-emerald-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Plantar</button>
-                            </>
-                          )}
-                          {worker.role === 'MEAT' && (
-                            <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'HUNT' } : w))} className={`px-3 py-0.5 text-[11px] rounded transition-colors flex-1 ${worker.mode === 'HUNT' ? 'bg-red-700 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>Cazar</button>
-                          )}
-                          {worker.role === 'SOLDIER' && (
-                            <>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_SOLDIERS' } : w))} title="Atacar Soldados" className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'ATTACK_SOLDIERS' ? 'bg-blue-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>S</button>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_WORKERS' } : w))} title="Atacar Trabajadores" className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'ATTACK_WORKERS' ? 'bg-red-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>T</button>
-                              <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'ATTACK_BUILDINGS' } : w))} title="Atacar Edificios" className={`px-1.5 py-0.5 text-[11px] rounded transition-colors ${worker.mode === 'ATTACK_BUILDINGS' ? 'bg-orange-600 font-bold' : 'bg-stone-700 hover:bg-stone-600'}`}>E</button>
-                            </>
-                          )}
-                          <button onClick={() => setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, mode: 'IDLE' } : w))} className={`px-1.5 py-0.5 text-[11px] rounded ml-auto transition-colors ${worker.mode === 'IDLE' ? 'bg-stone-200 text-stone-900 font-bold' : 'bg-stone-800 border border-stone-600 hover:bg-stone-700'}`}>Zz</button>
-                        </div>
+                      <div key={card.id} className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 flex items-center gap-2" title={card.name}>
+                        <span className="text-xl">{card.icon}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Right Column: Build & Settings */}
-        <div className="w-full md:w-1/4 p-4 flex flex-col overflow-y-auto touch-pan-y shrink-0 md:shrink">
-          <h3 className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2 shrink-0">Construcción</h3>
-          <div className="flex-1 flex flex-col md:flex-row gap-2 p-2 min-h-0 bg-stone-900 overflow-y-auto">
-            {/* Action Buttons GRID */}
-            <div className="flex-1 grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5 p-1 min-h-0">
-              {/* Row 1: Buildings (Unlocked per Phase) */}
-              {currentPhase >= 2 && (
-                <button 
-                  onClick={() => {
-                    const cost = 25 * Math.pow(2, playerHouseCount - 1);
-                    if (wood >= cost) buildHouseRef.current++;
-                  }}
-                  disabled={wood < (25 * Math.pow(2, playerHouseCount - 1))}
-                  className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
-                >
-                  <span className="font-bold text-xs">Casa</span>
-                  <span className="text-[9px] text-amber-300">{Math.floor(25 * Math.pow(2, playerHouseCount - 1))} M</span>
-                </button>
-              )}
-
-              {currentPhase >= 3 && (
-                <button 
-                  onClick={() => {
-                    const cost = 25 * Math.pow(2, butcherShopCount);
-                    if (wood >= cost) buildButcherShopRef.current++;
-                  }}
-                  disabled={wood < (25 * Math.pow(2, butcherShopCount))}
-                  className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
-                >
-                  <span className="font-bold text-xs">Caza</span>
-                  <span className="text-[9px] text-amber-300">{Math.floor(25 * Math.pow(2, butcherShopCount))} M</span>
-                </button>
-              )}
-
-              {currentPhase >= 4 && (
-                <>
-                  <button 
-                    onClick={() => {
-                      if (wood >= 150 && meat >= 50) buildMarketRef.current++;
-                    }}
-                    disabled={wood < 150 || meat < 50 || marketCount >= 1}
-                    className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
-                  >
-                    <span className="font-bold text-xs">Comercio</span>
-                    <span className="text-[9px] text-amber-300">150 M / 50 C</span>
-                  </button>
-                  <button 
-                    onClick={() => marketCount > 0 && setMarketOpen(!marketOpen)}
-                    disabled={marketCount === 0}
-                    className={`flex flex-col items-center justify-center p-1 ${marketOpen ? 'bg-amber-600 border-white' : 'bg-stone-700'} disabled:opacity-30 hover:bg-amber-700 border border-stone-600 rounded relative`}
-                  >
-                    <span className="font-bold text-xs">Tienda</span>
-                    <span className="text-[9px] text-yellow-300">Cartas</span>
-                  </button>
-                </>
-              )}
-
-              {currentPhase >= 5 && (
-                <>
-                  <button 
-                    onClick={() => {
-                      const cost = 50 * Math.pow(2, fortCount);
-                      if (wood >= cost && meat >= cost) buildFortRef.current++;
-                    }}
-                    disabled={wood < (50 * Math.pow(2, fortCount)) || meat < (50 * Math.pow(2, fortCount)) || fortCount >= 1}
-                    className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
-                  >
-                    <span className="font-bold text-xs">Fuerte</span>
-                    <span className="text-[9px] text-amber-300">{50 * Math.pow(2, fortCount)} M/C</span>
-                  </button>
-                  <button 
-                    onClick={() => {
-                      const cost = activeCards.some(c=>c.id==='mercenary')?25:50;
-                      if (meat >= cost) buildSoldierRef.current++;
-                    }}
-                    disabled={(activeCards.some(c=>c.id==='mercenary')?meat<25:meat<50) || fortCount === 0}
-                    className="flex flex-col items-center justify-center p-1 bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-600 border border-stone-600 rounded relative"
-                  >
-                    <span className="font-bold text-xs">Soldado</span>
-                    <span className="text-[9px] text-red-300">{activeCards.some(c=>c.id==='mercenary')?25:50} C</span>
-                  </button>
-                  <button 
-                    onClick={() => wood >= 50 && setIsPlacingTower(!isPlacingTower)}
-                    disabled={wood < 50}
-                    className={`flex flex-col items-center justify-center p-1 ${isPlacingTower ? 'bg-amber-600 border-white' : 'bg-stone-700'} disabled:opacity-30 disabled:cursor-not-allowed hover:bg-amber-700 border border-stone-600 rounded relative`}
-                  >
-                    <span className="font-bold text-xs">Torre</span>
-                    <span className="text-[9px] text-amber-300">50 M</span>
-                  </button>
-                </>
               )}
             </div>
           </div>
+        )}
 
-          <div className="mt-2 bg-stone-900 border border-stone-700 p-2 rounded shrink-0">
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-[9px] font-bold text-stone-400 uppercase">Descanso Auto.</label>
-              <span className="text-amber-500 font-bold text-[10px]">{restThreshold}%</span>
-            </div>
-            <input 
-              type="range" min="0" max="100" value={restThreshold} 
-              onChange={(e) => setRestThreshold(Number(e.target.value))}
-              className="w-full h-1 bg-stone-600 rounded-lg appearance-none cursor-pointer accent-amber-500"
-            />
+        {/* Victory Overlays (Styled to match new HUD) */}
+        {gameOver && gameOver.startsWith("VICTORY") && (
+          <div className="absolute inset-0 bg-stone-900/95 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-md z-[100] animate-fade-in">
+             <div className="hud-element p-12 max-w-2xl w-full border-amber-500 shadow-[0_0_100px_rgba(245,158,11,0.2)]">
+                <h2 className="text-6xl md:text-8xl font-black mb-6 tracking-tighter uppercase italic drop-shadow-2xl text-amber-500">VICTORY</h2>
+                <div className="w-24 h-1 bg-amber-600 rounded-full mx-auto mb-8" />
+                <p className="text-xl md:text-2xl font-black mb-12 max-w-lg mx-auto drop-shadow-md leading-tight text-stone-300 uppercase italic">
+                   {gameOver === "VICTORY_PHASE_1" ? "¡Hilas fino talando! 25 de madera conseguidos." :
+                    gameOver === "VICTORY_PHASE_2" ? "¡Crece la Aldea! Has construido tu futuro." :
+                    gameOver === "VICTORY_PHASE_3" ? "¡Primera Sangre! El banquete está servido." :
+                    gameOver === "VICTORY_PHASE_4" ? "¡El Mercader Sonríe! Tu aldea prospera." :
+                    gameOver === "VICTORY_PHASE_5" ? "¡Fortaleza Erigida! El enemigo tiembla." :
+                    "¡CONQUISTA TOTAL! Eres el Wood Gatherer definitivo."}
+                </p>
+                <div className="flex flex-col md:flex-row gap-4 justify-center">
+                  <button 
+                    onClick={() => {
+                        const phaseMap = { "VICTORY_PHASE_1": 2, "VICTORY_PHASE_2": 3, "VICTORY_PHASE_3": 4, "VICTORY_PHASE_4": 5, "VICTORY_PHASE_5": 6 };
+                        const next = phaseMap[gameOver];
+                        if (next) setMaxUnlockedPhase(Math.max(maxUnlockedPhase, next));
+                        setGameState('MAP');
+                    }}
+                    className="px-10 py-4 bg-amber-600 text-white font-black text-xl uppercase italic rounded-xl hover:bg-amber-500 hover:scale-105 transition-all shadow-xl"
+                  >
+                    CONTINUAR →
+                  </button>
+                  <button 
+                    onClick={() => setGameState('MAP')}
+                    className="px-10 py-4 bg-white/5 text-stone-400 font-black text-xl uppercase italic rounded-xl hover:bg-white/10 transition-all border border-white/10"
+                  >
+                    VOLVER AL MAPA
+                  </button>
+                </div>
+             </div>
           </div>
-        </div>
+        )}
 
+        {/* Regular Game Over */}
+        {gameOver && !gameOver.startsWith("VICTORY") && (
+          <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center text-white p-8 text-center backdrop-blur-sm z-[100]">
+            <div className="hud-element p-12 max-w-lg w-full border-red-500 shadow-[0_0_100px_rgba(239,68,68,0.2)]">
+               <h2 className="text-5xl font-black mb-4 tracking-tighter uppercase italic text-red-500">DERROTA</h2>
+               <p className="text-xl font-bold mb-10 text-stone-300">{gameOver}</p>
+               <button 
+                onClick={() => setGameState('MAP')}
+                className="w-full py-4 bg-red-600 text-white font-black uppercase italic rounded-xl hover:bg-red-500 transition-all shadow-xl"
+               >
+                 VOLVER A INTENTAR
+               </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
-  );
+    );
 }
+
+
