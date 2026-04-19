@@ -2339,6 +2339,11 @@ export default function App() {
         ctx.strokeRect(x - 10, y + 10, 20, 3);
       };
 
+      // =========================================================
+      // [LOCKED CORE: PHASE 1 PARITY] - EXACT SHADOW GEOMETRY
+      // DO NOT CHANGE RADIUS RATIO OR ALPHA WITHOUT EXPLICIT PERMISSION.
+      // Parity requirements: size*0.45(w) / size*0.15(h) / ellipse ratio 3:1
+      // =========================================================
       const drawShadow = (x: number, y: number, w: number = 0, h: number = 0) => {
           ctx.save();
           // The editor uses a precise 3:1 ratio for the contact shadow (AO)
@@ -2356,6 +2361,10 @@ export default function App() {
           ctx.restore();
       };
 
+      // =========================================================
+      // [LOCKED CORE: PHASE 1 PARITY] - DYNAMIC SHADOW SYSTEM
+      // DO NOT MODIFY CORE PROJECTION LOGIC.
+      // =========================================================
       const drawDynamicShadow = (ctx: CanvasRenderingContext2D, x: number, y: number, tile: any, light: any) => {
         const size = 32;
         let effectiveType = tile.type;
@@ -2430,6 +2439,10 @@ export default function App() {
       // --- INJECT JSON MAP STATIC LAYERS (3-PASS RENDERING) ---
       if (currentPhase === 1 && fase1Map && fase1Map.map && fase1Map.map.layers) {
         
+        // =========================================================
+        // [LOCKED CORE: PHASE 1 PARITY] - 3-PASS RENDERING PIPELINE
+        // Order must be: 1. Ground -> 2. Shadows (AO) -> 3. Objects/Entities
+        // =========================================================
         const renderLayerLogic = (layer: any) => {
           if (!layer.visible || layer.type === 'lighting') return;
           
@@ -2469,7 +2482,11 @@ export default function App() {
                       // Fixed bottom-anchoring to match editor's "grounded" look
                       const centerY = y * 32 + 32 + metaOffY;
 
-                      // 1. Contact Shadow (AO)
+                      // =========================================================
+                      // [LOCKED CORE: PHASE 1 PARITY] - CONTACT SHADOW (AO)
+                      // Standardized size (3:1 ratio) for consistent "grounding" 
+                      // =========================================================
+                      // DRAW CONTACT SHADOW (AO)
                       drawShadow(centerX, centerY - 2, 14, 7);
 
                       // 2. Dynamic Shadows (Requires Image)
@@ -2633,7 +2650,11 @@ export default function App() {
             const offsetY = (imgH - size) / 2;
             const offsetX = (frameW - size) / 2;
             
-            // EXACT PARITY COORDINATE CALCULATION (Bottom-Anchored)
+            // =========================================================
+            // [LOCKED CORE: PHASE 1 PARITY] - BOTTOM-ANCHORED ENTITIES
+            // All objects must anchor at currentTileBottom (t.y + 16).
+            // This ensures perfect alignment with static map shadows.
+            // =========================================================
             const metaOffX = meta?.shadowOffsetX || 0;
             const metaOffY = meta?.shadowOffsetY || 0;
             const centerX = t.x + metaOffX;

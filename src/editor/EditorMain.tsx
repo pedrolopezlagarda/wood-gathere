@@ -1437,6 +1437,10 @@ export default function App() {
     // =========================================================================
     // DYNAMIC SHADOW SYSTEM (LOCKED CORE LOGIC)
     // =========================================================================
+    // =========================================================
+    // [LOCKED CORE: PHASE 1 PARITY] - DYNAMIC SHADOW SYSTEM (LOCKED CORE LOGIC)
+    // DO NOT MODIFY CORE PROJECTION MATH.
+    // =========================================================
     const drawDynamicShadow = (ctx: CanvasRenderingContext2D, x: number, y: number, tile: TileData, light: LightSource) => {
       const size = map.tileSize;
       
@@ -1626,6 +1630,10 @@ export default function App() {
                   const centerX = x * size + size / 2 + metaOffX;
                   const centerY = y * size - offsetY + currentImgH + metaOffY; 
 
+                  // =========================================================
+                  // [LOCKED CORE: PHASE 1 PARITY] - CONTACT SHADOW (AO)
+                  // Standardized size (3:1 ratio) for consistent "grounding" 
+                  // =========================================================
                   // DRAW CONTACT SHADOW (AO)
                   ctx.save();
                   ctx.globalAlpha = 0.65;
