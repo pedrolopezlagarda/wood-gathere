@@ -15,6 +15,17 @@ if (fase1Map && fase1Map.customTiles) {
   });
 }
 
+// --- PHASE ASSET REGISTRY ---
+// Organizes which custom sprites correspond to standard game entities per phase.
+const PHASE_ASSET_TEMPLATES: Record<number, any> = {
+  1: {
+    WOOD_TREE: {
+      seedling: null, // null = use legacy (arbol_plantado.png)
+      grown: 'pixel_1776616244002' // The new custom pixel tree from Phase 1
+    }
+  }
+};
+
 type TileRole = 'none' | 'center' | 't' | 'b' | 'l' | 'r' | 'tl' | 'tr' | 'bl' | 'br' | 'itl' | 'itr' | 'ibl' | 'ibr';
 
 const getRoleFromMask = (mask: number, variant?: 'rounded' | 'square' | 'inner' | 'outer'): TileRole => {
@@ -248,6 +259,30 @@ export default function App() {
   const currentMeatRef = useRef(0);
   const currentAiMeatRef = useRef(0);
   const buildHouseRef = useRef(0);
+  const shadowCacheRef = useRef<HTMLCanvasElement | null>(null);
+
+  // --- PRE-RENDER SHADOW SPRITE (PERFORMANCE LOCK) ---
+  useEffect(() => {
+    const shadowCanvas = document.createElement('canvas');
+    shadowCanvas.width = 48; // Space for blur
+    shadowCanvas.height = 32;
+    const sCtx = shadowCanvas.getContext('2d');
+    if (sCtx) {
+      const size = 32;
+      const radiusX = size * 0.45; // 14.4
+      const radiusY = size * 0.15; // 4.8
+      sCtx.save();
+      sCtx.translate(24, 16);
+      sCtx.globalAlpha = 0.65;
+      sCtx.filter = 'blur(2px)';
+      sCtx.fillStyle = '#000000';
+      sCtx.beginPath();
+      sCtx.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
+      sCtx.fill();
+      sCtx.restore();
+      shadowCacheRef.current = shadowCanvas;
+    }
+  }, []);
   const buildButcherShopRef = useRef(0);
   const buildFortRef = useRef(0);
   const buildSoldierRef = useRef(0);
@@ -1504,6 +1539,9 @@ export default function App() {
         if (tree.state === 'PLANTED' && tree.growTime && Date.now() >= tree.growTime) {
           tree.state = 'GROWN';
           tree.wood = 3;
+          // Apply Phase-specific surgical skin update
+          const template = PHASE_ASSET_TEMPLATES[currentPhase]?.WOOD_TREE;
+          if (template?.grown) tree.customTileId = template.grown;
         }
       }
 
@@ -1662,7 +1700,8 @@ export default function App() {
               wood: 0,
               state: 'PLANTED',
               growTime: Date.now() + (activeCardsRef.current.has('forester') ? 30000 : 60000),
-              owner: 'PLAYER'
+              owner: 'PLAYER',
+              customTileId: PHASE_ASSET_TEMPLATES[currentPhase]?.WOOD_TREE?.seedling || null
             });
             p.target = { x: myHouse.x, y: myHouse.y };
             p.state = 'MOVING';
@@ -2328,6 +2367,15 @@ export default function App() {
       ctx.fillStyle = '#5e4433';
       ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
+      // Calculate Viewport Bounds for Culling
+      const zoom = cameraRef.current.zoom;
+      const halfW = (canvas.width / 2) / zoom;
+      const halfH = (canvas.height / 2) / zoom;
+      const startX = Math.max(0, Math.floor((cameraRef.current.x - halfW) / 32));
+      const endX = Math.min(WORLD_WIDTH / 32, Math.ceil((cameraRef.current.x + halfW) / 32));
+      const startY = Math.max(0, Math.floor((cameraRef.current.y - halfH) / 32));
+      const endY = Math.min(WORLD_HEIGHT / 32, Math.ceil((cameraRef.current.y + halfH) / 32));
+
       // Helper functions for drawing
       const drawHP = (x: number, y: number, current: number, max: number, color: string) => {
         ctx.fillStyle = '#d4d4d8';
@@ -2343,15 +2391,18 @@ export default function App() {
       // [LOCKED CORE: PHASE 1 PARITY] - EXACT SHADOW GEOMETRY
       // DO NOT CHANGE RADIUS RATIO OR ALPHA WITHOUT EXPLICIT PERMISSION.
       // Parity requirements: size*0.45(w) / size*0.15(h) / ellipse ratio 3:1
+      // OPTIMIZED: Uses pre-rendered Shadow Sprite Cache
       // =========================================================
       const drawShadow = (x: number, y: number, w: number = 0, h: number = 0) => {
+          if (shadowCacheRef.current) {
+            ctx.drawImage(shadowCacheRef.current, x - 24, y - 16);
+            return;
+          }
           ctx.save();
-          // The editor uses a precise 3:1 ratio for the contact shadow (AO)
-          // w and h were previously used for radii, but the editor hardcodes 14.4 and 4.8 for 32px tiles
+          // Fallback if cache not ready
           const size = 32;
-          const radiusX = size * 0.45; // 14.4
-          const radiusY = size * 0.15; // 4.8
-          
+          const radiusX = size * 0.45;
+          const radiusY = size * 0.15;
           ctx.globalAlpha = 0.65;
           ctx.filter = 'blur(2px)';
           ctx.fillStyle = '#000000';
@@ -2447,12 +2498,15 @@ export default function App() {
           if (!layer.visible || layer.type === 'lighting') return;
           
           if (layer.type === 'shadows') {
-            // Shadow implementation: Cast shadows from all other visible layers
             const castLayers = fase1Map.map.layers.filter((l: any) => l.type !== 'shadows' && l.type !== 'lighting' && l.visible);
             castLayers.forEach((castLayer: any) => {
               if (!castLayer.data) return;
-              castLayer.data.forEach((row: any[], y: number) => {
-                row.forEach((tile: any, x: number) => {
+              // VIEWPORT CULLING: Only iterate over visible rows and columns
+              for (let y = startY; y < Math.min(endY, castLayer.data.length); y++) {
+                const row = castLayer.data[y];
+                if (!row) continue;
+                for (let x = startX; x < Math.min(endX, row.length); x++) {
+                  const tile = row[x];
                   if (tile) {
                     let effectiveType = tile.type;
                     if (effectiveType.startsWith('group_')) {
@@ -2466,30 +2520,17 @@ export default function App() {
                       hasShadow = fase1Map.tileGroups[gid].tiles.some((tId: string) => fase1Map.tileMetadata?.[tId]?.hasShadow);
                     }
 
-                    // BREAKING PARITY FIX: Skip trees here because their dynamic entities handle their own shadows.
-                    // This prevents "ghost" shadows from remaining after a tree is felled.
                     if (meta?.entityType === 'WOOD_TREE') hasShadow = false;
 
                     if (hasShadow) {
                       const img = fase1CustomImages[effectiveType];
-                      let currentImgH = 32;
-                      if (img && img.complete) currentImgH = img.height;
-                      
-                      const offsetY = (currentImgH - 32) / 2;
                       const metaOffX = meta?.shadowOffsetX || 0;
                       const metaOffY = meta?.shadowOffsetY || 0;
                       const centerX = x * 32 + 16 + metaOffX;
-                      // Fixed bottom-anchoring to match editor's "grounded" look
                       const centerY = y * 32 + 32 + metaOffY;
 
-                      // =========================================================
-                      // [LOCKED CORE: PHASE 1 PARITY] - CONTACT SHADOW (AO)
-                      // Standardized size (3:1 ratio) for consistent "grounding" 
-                      // =========================================================
-                      // DRAW CONTACT SHADOW (AO)
-                      drawShadow(centerX, centerY - 2, 14, 7);
+                      drawShadow(centerX, centerY - 2);
 
-                      // 2. Dynamic Shadows (Requires Image)
                       if (img && img.complete) {
                         const lights = fase1Map.map.lights || [];
                         lights.forEach((light: any) => {
@@ -2498,15 +2539,19 @@ export default function App() {
                       }
                     }
                   }
-                });
-              });
+                }
+              }
             });
             return;
           }
           
           if (layer.data) {
-            layer.data.forEach((row: any[], y: number) => {
-              row.forEach((tile: any, x: number) => {
+            // VIEWPORT CULLING: Only iterate over visible rows and columns
+            for (let y = startY; y < Math.min(endY, layer.data.length); y++) {
+              const row = layer.data[y];
+              if (!row) continue;
+              for (let x = startX; x < Math.min(endX, row.length); x++) {
+                const tile = row[x];
                 if (tile && tile.type) {
                   let effectiveType = tile.type;
                   if (effectiveType.startsWith('group_')) {
@@ -2589,8 +2634,8 @@ export default function App() {
                     }
                   }
                 }
-              });
-            });
+              }
+            }
           }
         };
 
@@ -2663,7 +2708,7 @@ export default function App() {
             const centerY = (t.y + 16) + metaOffY; 
 
             // 1. Contact Shadow (AO)
-            drawShadow(centerX, centerY - 2, 14, 7);
+            drawShadow(centerX, centerY - 2);
 
             // 2. Dynamic Shadows (Projection)
             const lights = fase1Map.map.lights || [];
@@ -2687,7 +2732,7 @@ export default function App() {
               ctx.drawImage(img, sourceX, 0, frameW, imgH, t.x - frameW / 2, (t.y + 16) - imgH, frameW, imgH);
             }
           } else if (genericImg && genericImg.complete) {
-            drawShadow(t.x, t.y + 16, 12, 6);
+            drawShadow(t.x, t.y + 16);
             const width = 32;
             const height = 32;
             ctx.drawImage(genericImg, t.x - width / 2, t.y + 16 - height, width, height);
@@ -2696,7 +2741,7 @@ export default function App() {
             ctx.fillText(isBorder ? 'B' : 'a', t.x, t.y);
           }
         } else if (t.state === 'PLANTED') {
-          drawShadow(t.x, t.y + 4, 6, 3);
+          drawShadow(t.x, t.y + 16);
           if (plantedTreeImageRef.current && plantedTreeImageRef.current.complete) {
             const width = 24;
             const height = 24;
@@ -2748,7 +2793,7 @@ export default function App() {
       if (currentPhase > 4) {
         aiHouses.forEach(h => {
           if (!h) return;
-          drawShadow(h.x, h.y + 10, 20, 10);
+          drawShadow(h.x, h.y + 10);
           drawPixelHouse(h.x, h.y, true);
           drawHP(h.x, h.y + 15, h.hp, 100, '#ef4444');
         });
@@ -2787,7 +2832,7 @@ export default function App() {
       // Draw Butcher Shops
       butcherShops.forEach(h => {
         if (!h) return;
-        drawShadow(h.x, h.y + 10, 24, 12);
+        drawShadow(h.x, h.y + 10);
         if (carniceriaImageRef.current && carniceriaImageRef.current.complete) {
           const width = 36;
           const height = 36;
@@ -2877,7 +2922,7 @@ export default function App() {
       // Draw Forts ('F' or fuerte.png)
       playerForts.forEach(f => {
         if (!f) return;
-        drawShadow(f.x, f.y + 15, 30, 15);
+        drawShadow(f.x, f.y + 15);
         if (fortImageRef.current && fortImageRef.current.complete) {
           const width = 48; 
           const height = 48;
