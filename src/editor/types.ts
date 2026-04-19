@@ -42,7 +42,7 @@ export interface MapData {
     intensity: number;
   };
   tileGroups?: Record<string, { name: string; tiles: string[] }>;
-  tileMetadata?: Record<string, { priority: number; role?: string; frameCount?: number; hasShadow?: boolean; sway?: boolean; isWall?: boolean }>;
+  tileMetadata?: Record<string, { priority: number; role?: string; frameCount?: number; hasShadow?: boolean; sway?: boolean; isWall?: boolean; entityType?: 'NONE' | 'WOOD_TREE' | 'TOWN_HALL' | 'ENEMY_BASE' | 'BUILDING_BUTCHER' | 'BUILDING_MARKET' | 'BUILDING_FORTRESS' | 'BUILDING_TOWER' }>;
 }
 
 export interface EditorConfig {
@@ -58,5 +58,5 @@ export interface TileLibrary {
   name: string;
   groups: Record<string, { name: string; tiles: string[]; priority: number }>;
   tiles: Record<string, string>;
-  metadata: Record<string, { priority: number; role?: string; hasShadow?: boolean; sway?: boolean; isWall?: boolean }>;
+  metadata: Record<string, { priority: number; role?: string; hasShadow?: boolean; sway?: boolean; isWall?: boolean; entityType?: 'NONE' | 'WOOD_TREE' | 'TOWN_HALL' | 'ENEMY_BASE' | 'BUILDING_BUTCHER' | 'BUILDING_MARKET' | 'BUILDING_FORTRESS' | 'BUILDING_TOWER' }>;
 }

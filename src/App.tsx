@@ -1,5 +1,78 @@
 import React, { useEffect, useRef, useState } from 'react';
-import EditorMain from './editor/EditorMain';
+import { RotateCcw, Play, Square, Pause, Flame, Heart, Zap, Crosshair, ArrowUp, Flag, Map, Info, User, HelpCircle, Eye, Settings, Volume2 } from 'lucide-react';
+import { default as EditorMain } from './editor/EditorMain';
+import fase1MapRaw from './maps/fase1.json';
+
+const fase1Map: any = fase1MapRaw;
+const fase1CustomImages: Record<string, HTMLImageElement> = {};
+if (fase1Map && fase1Map.customTiles) {
+  Object.entries(fase1Map.customTiles).forEach(([id, base64]) => {
+    if (typeof base64 === 'string' && base64.startsWith('data:image')) {
+      const img = new Image();
+      img.src = base64;
+      fase1CustomImages[id] = img;
+    }
+  });
+}
+
+type TileRole = 'none' | 'center' | 't' | 'b' | 'l' | 'r' | 'tl' | 'tr' | 'bl' | 'br' | 'itl' | 'itr' | 'ibl' | 'ibr';
+
+const getRoleFromMask = (mask: number, variant?: 'rounded' | 'square' | 'inner' | 'outer'): TileRole => {
+  const u = mask & 1;
+  const l = mask & 2;
+  const r = mask & 4;
+  const d = mask & 8;
+  
+  if (variant === 'square') return 'center';
+
+  if (variant === 'inner') {
+    if (d && r) return 'itl';
+    if (d && l) return 'itr';
+    if (u && r) return 'ibl';
+    if (u && l) return 'ibr';
+    return 'center';
+  }
+  if (variant === 'outer') {
+    if (d && r) return 'tl';
+    if (d && l) return 'tr';
+    if (u && r) return 'bl';
+    if (u && l) return 'br';
+    return 'center';
+  }
+
+  const count = (u ? 1 : 0) + (l ? 1 : 0) + (r ? 1 : 0) + (d ? 1 : 0);
+  if (count >= 3) return 'center';
+  if ((u && d) || (l && r)) return 'center';
+
+  if (d && r && !u && !l) return 'tl';
+  if (d && l && !u && !r) return 'tr';
+  if (u && r && !d && !l) return 'bl';
+  if (u && l && !d && !r) return 'br';
+
+  if (d && !u && !l && !r) return 't';
+  if (u && !d && !l && !r) return 'b';
+  if (r && !u && !d && !l) return 'l';
+  if (l && !u && !d && !r) return 'r';
+
+  return 'center';
+};
+
+const resolveTileFromGroup = (tile: any, x: number, y: number, mapData: any): string => {
+  if (!tile || !tile.type) return '';
+  if (!tile.type.startsWith('group_') || !mapData.tileGroups?.[tile.type]) return tile.type;
+  
+  const group = mapData.tileGroups[tile.type];
+  const role = getRoleFromMask(tile.mask, tile.variant);
+  const matchingTiles = group.tiles.filter((tId: string) => (mapData.tileMetadata?.[tId] as any)?.role === role);
+  
+  if (matchingTiles.length > 0) {
+    const index = (x * 7 + y * 13) % matchingTiles.length;
+    return matchingTiles[index];
+  } else if (group.tiles.length > 0) {
+    return group.tiles[0];
+  }
+  return tile.type;
+};
 
 // Game constants
 const WORLD_WIDTH = 2400;
@@ -11,8 +84,8 @@ const BOAR_REST_DURATION = 600;
 const BOAR_REST_POINT = { x: WORLD_WIDTH - 200, y: WORLD_HEIGHT - 200 };
 
 // Phase 1 circular arena config
-const PHASE1_CENTER_X = WORLD_WIDTH / 2;
-const PHASE1_CENTER_Y = WORLD_HEIGHT / 2;
+let PHASE1_CENTER_X = WORLD_WIDTH / 2;
+let PHASE1_CENTER_Y = WORLD_HEIGHT / 2;
 const PHASE1_PLAY_RADIUS = 320; // radio del área de juego jugable
 const PHASE1_BORDER_RADIUS = 370; // radio donde empiezan los árboles circulares
 
@@ -27,6 +100,7 @@ interface Tree extends Point {
   state: 'PLANTED' | 'GROWN';
   growTime?: number;
   owner: 'PLAYER' | 'AI' | 'BORDER';
+  customTileId?: string;
 }
 
 type GameMode = 'GATHER' | 'PLANT' | 'IDLE' | 'HUNT' | 'ATTACK_WORKERS' | 'ATTACK_BUILDINGS' | 'ATTACK_SOLDIERS';
@@ -509,20 +583,20 @@ export default function App() {
     }
     
     // Aliases for local usage within initialization to satisfy existing logic
-    const playerHouses = playerHousesRef.current;
-    const aiHouses = aiHousesRef.current;
-    const butcherShops = butcherShopsRef.current;
-    const aiButcherShops = aiButcherShopsRef.current;
-    const playerForts = playerFortsRef.current;
-    const aiForts = aiFortsRef.current;
-    const playerMarkets = playerMarketsRef.current;
-    const playerCharacters = playerCharactersRef.current;
-    const aiCharacters = aiCharactersRef.current;
-    const wildBoars = wildBoarsRef.current;
-    const playerSoldiers = playerSoldiersRef.current;
-    const aiSoldiers = aiSoldiersRef.current;
-    const hunters = playerHuntersRef.current;
-    const aiHunters = aiHuntersRef.current;
+    let playerHouses = playerHousesRef.current;
+    let aiHouses = aiHousesRef.current;
+    let butcherShops = butcherShopsRef.current;
+    let aiButcherShops = aiButcherShopsRef.current;
+    let playerForts = playerFortsRef.current;
+    let aiForts = aiFortsRef.current;
+    let playerMarkets = playerMarketsRef.current;
+    let playerCharacters = playerCharactersRef.current;
+    let aiCharacters = aiCharactersRef.current;
+    let wildBoars = wildBoarsRef.current;
+    let playerSoldiers = playerSoldiersRef.current;
+    let aiSoldiers = aiSoldiersRef.current;
+    let hunters = playerHuntersRef.current;
+    let aiHunters = aiHuntersRef.current;
     
     // For ID references which are already numeric, we need to be careful.
     // However, much of the code incremented local 'nextBuildingId' vars.
@@ -654,27 +728,74 @@ export default function App() {
     };
 
     if (currentPhase === 1) {
-      // Phase 1 Clustered
-      addCluster(PHASE1_CENTER_X, PHASE1_CENTER_Y, 15, 300, 'PLAYER', trees);
-      
-      // Border Rings
-      const RING_COUNT = 80;
-      for (let i = 0; i < RING_COUNT; i++) {
-        const angle = (i / RING_COUNT) * Math.PI * 2;
-        for (let ring = 0; ring < 4; ring++) {
-          const r = PHASE1_BORDER_RADIUS + ring * 38 + (Math.random() - 0.5) * 20;
-          const rx = PHASE1_CENTER_X + Math.cos(angle + ring * 0.05) * r;
-          const ry = PHASE1_CENTER_Y + Math.sin(angle + ring * 0.05) * r;
-          trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
-        }
+      let mapHasEntities = false;
+      let houseSpawned = false;
+
+      if (fase1Map && fase1Map.map && fase1Map.map.layers) {
+        fase1Map.map.layers.forEach((layer: any) => {
+          if (!layer.data) return;
+          layer.data.forEach((row: any[], y: number) => {
+            row.forEach((tile: any, x: number) => {
+              if (tile && tile.type) {
+                let effectiveType = tile.type;
+                if (effectiveType.startsWith('group_')) {
+                  effectiveType = resolveTileFromGroup(tile, x, y, fase1Map);
+                }
+                
+                const meta = fase1Map.tileMetadata?.[effectiveType];
+                if (meta?.entityType === 'WOOD_TREE') {
+                  trees.push({ id: nextTreeId++, x: x * 32 + 16, y: y * 32 + 16, wood: 3, state: 'GROWN', owner: 'PLAYER', customTileId: effectiveType });
+                  mapHasEntities = true;
+                } else if (meta?.entityType === 'TOWN_HALL') {
+                  const spawnX = x * 32 + 16;
+                  const spawnY = y * 32 + 16;
+                  
+                  // Re-spawn the Town Hall exactly here!
+                  playerHousesRef.current = [{ id: 0, x: spawnX, y: spawnY, hp: 100, spawnTimer: 3600 }];
+                  playerCharactersRef.current[0].houseId = 0;
+                  playerCharactersRef.current[0].x = spawnX;
+                  playerCharactersRef.current[0].y = spawnY + 15;
+                  
+                  // Update the global camera anchor so Phase 1 camera locks perfectly here
+                  PHASE1_CENTER_X = spawnX;
+                  PHASE1_CENTER_Y = spawnY;
+                  
+                  // Setup camera to look here
+                  cameraRef.current = { x: spawnX, y: spawnY, zoom: 1.2 };
+                  targetCameraRef.current = { x: spawnX, y: spawnY, zoom: 1.2 };
+                  
+                  houseSpawned = true;
+                  mapHasEntities = true;
+                }
+              }
+            });
+          });
+        });
       }
-      
-      // Exterior Density Seeds
-      for (let i = 0; i < 40; i++) {
-          const sx = Math.random() * WORLD_WIDTH;
-          const sy = Math.random() * WORLD_HEIGHT;
-          if (Math.hypot(sx - PHASE1_CENTER_X, sy - PHASE1_CENTER_Y) < PHASE1_BORDER_RADIUS) continue;
-          addCluster(sx, sy, 50, 400, 'BORDER', trees);
+
+      if (!mapHasEntities) {
+        // Fallback procedural layout if JSON is empty or missing entities
+        addCluster(PHASE1_CENTER_X, PHASE1_CENTER_Y, 15, 300, 'PLAYER', trees);
+        
+        // Border Rings
+        const RING_COUNT = 80;
+        for (let i = 0; i < RING_COUNT; i++) {
+          const angle = (i / RING_COUNT) * Math.PI * 2;
+          for (let ring = 0; ring < 4; ring++) {
+            const r = PHASE1_BORDER_RADIUS + ring * 38 + (Math.random() - 0.5) * 20;
+            const rx = PHASE1_CENTER_X + Math.cos(angle + ring * 0.05) * r;
+            const ry = PHASE1_CENTER_Y + Math.sin(angle + ring * 0.05) * r;
+            trees.push({ id: nextTreeId++, x: rx, y: ry, wood: 0, state: 'GROWN', owner: 'BORDER' });
+          }
+        }
+        
+        // Exterior Density Seeds
+        for (let i = 0; i < 40; i++) {
+            const sx = Math.random() * WORLD_WIDTH;
+            const sy = Math.random() * WORLD_HEIGHT;
+            if (Math.hypot(sx - PHASE1_CENTER_X, sy - PHASE1_CENTER_Y) < PHASE1_BORDER_RADIUS) continue;
+            addCluster(sx, sy, 50, 400, 'BORDER', trees);
+        }
       }
     } else {
       // General Phases Clustered
@@ -690,6 +811,10 @@ export default function App() {
           addCluster(rx, ry, 40, 500, 'BORDER', trees);
       }
     }
+
+    // UPDATE ALIASES to capture any Map modifications (e.g. Town Hall replacement)
+    playerHouses = playerHousesRef.current;
+    playerCharacters = playerCharactersRef.current;
 
     const getClosestTree = (point: Point, availableTrees: Tree[], owner: 'PLAYER' | 'AI', currentCharacterId: number) => {
       let closest = null;
@@ -2188,8 +2313,8 @@ export default function App() {
         canvas.height = canvas.clientHeight;
       }
 
-      // Clear screen (Solid tan background)
-      ctx.fillStyle = '#e1d4b7'; 
+      // Clear screen
+      ctx.fillStyle = '#5e4433'; // Editor 'Tierra'
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.save();
@@ -2199,8 +2324,8 @@ export default function App() {
       ctx.scale(cameraRef.current.zoom, cameraRef.current.zoom);
       ctx.translate(-cameraRef.current.x, -cameraRef.current.y);
 
-      // Draw base world layer (solid tan matches outside)
-      ctx.fillStyle = '#e1d4b7';
+      // Draw base world layer
+      ctx.fillStyle = '#5e4433';
       ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
       // Helper functions for drawing
@@ -2214,15 +2339,76 @@ export default function App() {
         ctx.strokeRect(x - 10, y + 10, 20, 3);
       };
 
-      const drawShadow = (x: number, y: number, w: number, h: number) => {
+      const drawShadow = (x: number, y: number, w: number = 0, h: number = 0) => {
           ctx.save();
-          ctx.translate(x, y);
-          ctx.scale(1, 0.5);
-          ctx.fillStyle = 'rgba(0,0,0,0.1)';
+          // The editor uses a precise 3:1 ratio for the contact shadow (AO)
+          // w and h were previously used for radii, but the editor hardcodes 14.4 and 4.8 for 32px tiles
+          const size = 32;
+          const radiusX = size * 0.45; // 14.4
+          const radiusY = size * 0.15; // 4.8
+          
+          ctx.globalAlpha = 0.65;
+          ctx.filter = 'blur(2px)';
+          ctx.fillStyle = '#000000';
           ctx.beginPath();
-          ctx.arc(0, 0, w, 0, Math.PI * 2);
+          ctx.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
+      };
+
+      const drawDynamicShadow = (ctx: CanvasRenderingContext2D, x: number, y: number, tile: any, light: any) => {
+        const size = 32;
+        let effectiveType = tile.type;
+        if (effectiveType.startsWith('group_')) {
+          effectiveType = resolveTileFromGroup(tile, x, y, fase1Map);
+        }
+        
+        const img = fase1CustomImages[effectiveType];
+        if (!img || !img.complete) return;
+        
+        const meta = fase1Map.tileMetadata?.[effectiveType];
+        const frameCount = meta?.frameCount || 1;
+        const frameW = img.width / frameCount;
+        const imgH = img.height;
+        const currentFrame = Math.floor(Date.now() / 125) % frameCount;
+        const sourceX = currentFrame * frameW;
+        
+        const offsetY = (imgH - size) / 2;
+        const metaOffX = meta?.shadowOffsetX || 0;
+        const metaOffY = meta?.shadowOffsetY || 0;
+        
+        const anchorX = x * size + size / 2 + metaOffX;
+        const anchorY = y * size - offsetY + imgH + metaOffY;
+        
+        const dx = anchorX - light.x;
+        const dy = anchorY - light.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist > light.radius * 2.0) return;
+        const angle = Math.atan2(dy, dx);
+        
+        ctx.save();
+        const falloff = Math.max(0, 1 - dist / (light.radius * 2.0));
+        const opacity = falloff * light.intensity * 0.55;
+        ctx.globalAlpha = opacity;
+        
+        const blurAmount = Math.max(4, dist / 15);
+        ctx.filter = `brightness(0) blur(${blurAmount}px)`;
+        
+        ctx.translate(anchorX, anchorY);
+        ctx.rotate(angle);
+        const stretch = 1 + dist / 350;
+        ctx.scale(stretch, 0.6);
+        
+        if (meta?.sway) {
+           const time = Date.now() / 1000;
+           const skew = Math.sin(time * 2 + (x * 0.5) + (y * 0.5)) * 0.12;
+           ctx.transform(1, skew * 2, 0, 1, 0, 0);
+        }
+        
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(img, sourceX, 0, frameW, imgH, -frameW / 2, -imgH, frameW, imgH);
+        ctx.restore();
       };
 
       const drawPixelHouse = (x: number, y: number, isAi: boolean) => {
@@ -2230,7 +2416,7 @@ export default function App() {
           const width = 32;
           const height = 32;
           ctx.drawImage(houseImageRef.current, x - width / 2, y - height / 2, width, height);
-          if (isAi) {
+              if (isAi) {
             ctx.strokeStyle = '#ef4444';
             ctx.lineWidth = 2;
             ctx.strokeRect(x - width / 2, y - height / 2, width, height);
@@ -2241,16 +2427,177 @@ export default function App() {
         ctx.fillRect(x - 16, y - 16, 32, 32);
       };
 
-      // Draw Map Decorations (Grass, Rocks) - REMOVED for clean look
-      /*
-      decorationsRef.current.forEach(d => {
-         ...
-      });
-      */
+      // --- INJECT JSON MAP STATIC LAYERS (3-PASS RENDERING) ---
+      if (currentPhase === 1 && fase1Map && fase1Map.map && fase1Map.map.layers) {
+        
+        const renderLayerLogic = (layer: any) => {
+          if (!layer.visible || layer.type === 'lighting') return;
+          
+          if (layer.type === 'shadows') {
+            // Shadow implementation: Cast shadows from all other visible layers
+            const castLayers = fase1Map.map.layers.filter((l: any) => l.type !== 'shadows' && l.type !== 'lighting' && l.visible);
+            castLayers.forEach((castLayer: any) => {
+              if (!castLayer.data) return;
+              castLayer.data.forEach((row: any[], y: number) => {
+                row.forEach((tile: any, x: number) => {
+                  if (tile) {
+                    let effectiveType = tile.type;
+                    if (effectiveType.startsWith('group_')) {
+                      effectiveType = resolveTileFromGroup(tile, x, y, fase1Map);
+                    }
+                    const meta = fase1Map.tileMetadata?.[effectiveType];
+                    const gid = tile.type.startsWith('group_') ? tile.type : undefined;
+                    
+                    let hasShadow = meta?.hasShadow;
+                    if (!hasShadow && gid && fase1Map.tileGroups?.[gid]) {
+                      hasShadow = fase1Map.tileGroups[gid].tiles.some((tId: string) => fase1Map.tileMetadata?.[tId]?.hasShadow);
+                    }
+
+                    // BREAKING PARITY FIX: Skip trees here because their dynamic entities handle their own shadows.
+                    // This prevents "ghost" shadows from remaining after a tree is felled.
+                    if (meta?.entityType === 'WOOD_TREE') hasShadow = false;
+
+                    if (hasShadow) {
+                      const img = fase1CustomImages[effectiveType];
+                      let currentImgH = 32;
+                      if (img && img.complete) currentImgH = img.height;
+                      
+                      const offsetY = (currentImgH - 32) / 2;
+                      const metaOffX = meta?.shadowOffsetX || 0;
+                      const metaOffY = meta?.shadowOffsetY || 0;
+                      const centerX = x * 32 + 16 + metaOffX;
+                      // Fixed bottom-anchoring to match editor's "grounded" look
+                      const centerY = y * 32 + 32 + metaOffY;
+
+                      // 1. Contact Shadow (AO)
+                      drawShadow(centerX, centerY - 2, 14, 7);
+
+                      // 2. Dynamic Shadows (Requires Image)
+                      if (img && img.complete) {
+                        const lights = fase1Map.map.lights || [];
+                        lights.forEach((light: any) => {
+                          drawDynamicShadow(ctx, x, y, tile, light);
+                        });
+                      }
+                    }
+                  }
+                });
+              });
+            });
+            return;
+          }
+          
+          if (layer.data) {
+            layer.data.forEach((row: any[], y: number) => {
+              row.forEach((tile: any, x: number) => {
+                if (tile && tile.type) {
+                  let effectiveType = tile.type;
+                  if (effectiveType.startsWith('group_')) {
+                    effectiveType = resolveTileFromGroup(tile, x, y, fase1Map);
+                  }
+                  
+                  const meta = fase1Map.tileMetadata?.[effectiveType];
+                  const groupMeta = tile.type.startsWith('group_') ? fase1Map.tileMetadata?.[tile.type] : undefined;
+                  const isSwaying = meta?.sway || groupMeta?.sway;
+                  
+                  // Only draw if NOT a separately handled entity (like trees in some cases, but for Phase 1 we draw everything static)
+                  if (meta?.entityType !== 'WOOD_TREE') {
+                    const img = fase1CustomImages[effectiveType];
+                    const size = 32;
+                    const px = x * size;
+                    const py = y * size;
+                    
+                    if (img && img.complete) {
+                      const frameCount = meta?.frameCount || 1;
+                      const frameW = img.width / frameCount;
+                      const imgH = img.height;
+                      const currentFrame = Math.floor(Date.now() / 125) % frameCount;
+                      const sourceX = currentFrame * frameW;
+                      const offsetX = (frameW - size) / 2;
+                      const offsetY = (imgH - size) / 2;
+                      
+                      if (isSwaying) {
+                        ctx.save();
+                        const time = Date.now() / 1000;
+                        const swayAngle = Math.sin(time * 2 + (x * 0.5 + y * 0.5)) * 0.05;
+                        // BOTTOM ANCHOR SYNC
+                        ctx.translate(px + size / 2, py + size);
+                        ctx.rotate(swayAngle);
+                        ctx.drawImage(img, sourceX, 0, frameW, imgH, -frameW / 2, -imgH, frameW, imgH);
+                        ctx.restore();
+                      } else {
+                        // BOTTOM ANCHOR SYNC
+                        ctx.drawImage(img, sourceX, 0, frameW, imgH, px + size / 2 - frameW / 2, py + size - imgH, frameW, imgH);
+                      }
+                      // Procedural drawing for hierba/grass tokens that aren't custom images
+                      let color = 'transparent';
+                      const isGrass = effectiveType === 'hierba' || effectiveType === 'grass' || effectiveType.startsWith('hierba_') || effectiveType.startsWith('grass_');
+                      if (isGrass) color = '#3d6e3d';
+                      else if (effectiveType === 'tierra' || effectiveType === 'dirt' || effectiveType.startsWith('tierra_')) color = '#5e4433';
+                      else if (effectiveType === 'agua' || effectiveType === 'water' || effectiveType.startsWith('agua_')) color = '#335e8e';
+                      else if (effectiveType === 'arena' || effectiveType === 'sand' || effectiveType.startsWith('arena_')) color = '#dcb484';
+                      
+                      if (color !== 'transparent') {
+                        if (isSwaying) {
+                          ctx.save();
+                          const time = Date.now() / 1000;
+                          const skew = Math.sin(time * 2.0 + x * 0.5 + y * 0.3) * 0.2;
+                          ctx.translate(px + size / 2, py + size - 2);
+                          ctx.transform(1, 0, skew, 1, 0, 0);
+                          const colors = ['#2d4d2d', color, '#5a8a5a'];
+                          
+                          for (let i = 0; i < 5; i++) {
+                            const off = [-8, -4, 0, 4, 8][i];
+                            const h = [0.7, 0.9, 0.8, 1.0, 0.6][i] * size * 0.75;
+                            const curveOff = Math.cos(time * 2.0 + i) * 5;
+                            ctx.beginPath();
+                            ctx.moveTo(off, 0);
+                            ctx.bezierCurveTo(off + curveOff, -h * 0.3, off + curveOff * 2, -h * 0.6, off + curveOff, -h);
+                            ctx.strokeStyle = colors[i % colors.length];
+                            ctx.lineWidth = 2;
+                            ctx.lineCap = 'round';
+                            ctx.stroke();
+                          }
+                          ctx.restore();
+                        } else if (layer.type !== 'ground') {
+                          ctx.save();
+                          ctx.fillStyle = color;
+                          ctx.beginPath(); ctx.arc(px + size / 2, py + size / 2, size * 0.4, 0, Math.PI * 2); ctx.fill();
+                          ctx.restore();
+                        } else {
+                          ctx.fillStyle = color;
+                          ctx.fillRect(px, py, size, size);
+                        }
+                      }
+                    }
+                  }
+                }
+              });
+            });
+          }
+        };
+
+        // Pass 1: Ground Layers
+        fase1Map.map.layers.filter((l: any) => l.type === 'ground').forEach(renderLayerLogic);
+        
+        // Pass 2: Shadows (Includes AO and Dynamic Shadows)
+        fase1Map.map.layers.filter((l: any) => l.type === 'shadows').forEach(renderLayerLogic);
+        
+        // Pass 3: Object Layers & Everything Else
+        fase1Map.map.layers.filter((l: any) => l.type !== 'ground' && l.type !== 'shadows' && l.type !== 'lighting').forEach(renderLayerLogic);
+      }
+      // ------------------------------------
 
       // Draw Player Houses
       playerHouses.forEach(h => {
         if (!h) return;
+        
+        // Skip drawing the generic house for the first initial Town Hall because the static JSON map paints it pixel-perfectly!
+        if (currentPhase === 1 && h.id === 0) {
+           drawHP(h.x, h.y + 15, h.hp, 100, '#16a34a'); 
+           return;
+        }
+        
         drawShadow(h.x, h.y + 10, 20, 10);
         drawPixelHouse(h.x, h.y, false);
         drawHP(h.x, h.y + 15, h.hp, 100, '#16a34a');
@@ -2271,15 +2618,60 @@ export default function App() {
       
       [...visibleTrees].sort((a, b) => a.y - b.y).forEach((t) => {
         if (t.state === 'GROWN' && (t.wood > 0 || t.owner === 'BORDER')) {
-          drawShadow(t.x, t.y + 8, 12, 6);
           const isBorder = t.owner === 'BORDER';
-          const img = isBorder ? borderTreeImageRef.current : grownTreeImageRef.current;
-          if (img && img.complete) {
+          const genericImg = isBorder ? borderTreeImageRef.current : grownTreeImageRef.current;
+          
+          if (t.customTileId && fase1CustomImages[t.customTileId]?.complete) {
+            const img = fase1CustomImages[t.customTileId];
+            const meta = fase1Map.tileMetadata?.[t.customTileId];
+            const size = 32;
+            const frameCount = meta?.frameCount || 1;
+            const frameW = img.width / frameCount;
+            const currentFrame = Math.floor(Date.now() / 125) % frameCount;
+            const sourceX = currentFrame * frameW;
+            const imgH = img.height;
+            const offsetY = (imgH - size) / 2;
+            const offsetX = (frameW - size) / 2;
+            
+            // EXACT PARITY COORDINATE CALCULATION (Bottom-Anchored)
+            const metaOffX = meta?.shadowOffsetX || 0;
+            const metaOffY = meta?.shadowOffsetY || 0;
+            const centerX = t.x + metaOffX;
+            // The tree's visual base in the engine should be at the bottom of its 32x32 tile area.
+            // Tile bottom is t.y + 16.
+            const centerY = (t.y + 16) + metaOffY; 
+
+            // 1. Contact Shadow (AO)
+            drawShadow(centerX, centerY - 2, 14, 7);
+
+            // 2. Dynamic Shadows (Projection)
+            const lights = fase1Map.map.lights || [];
+            lights.forEach((light: any) => {
+               const tx = (t.x - 16) / 32;
+               const ty = (t.y - 16) / 32;
+               drawDynamicShadow(ctx, tx, ty, { type: t.customTileId }, light);
+            });
+            
+            if (meta?.sway) {
+              ctx.save();
+              const time = Date.now() / 1000;
+              const swayAngle = Math.sin(time * 2 + (t.x * 0.05)) * 0.05;
+              // Pivot at the exact base of the trunk
+              ctx.translate(t.x, t.y + 16); 
+              ctx.rotate(swayAngle);
+              ctx.drawImage(img, sourceX, 0, frameW, imgH, -frameW / 2, -imgH, frameW, imgH);
+              ctx.restore();
+            } else {
+              // Draw anchored at the bottom-center
+              ctx.drawImage(img, sourceX, 0, frameW, imgH, t.x - frameW / 2, (t.y + 16) - imgH, frameW, imgH);
+            }
+          } else if (genericImg && genericImg.complete) {
+            drawShadow(t.x, t.y + 16, 12, 6);
             const width = 32;
             const height = 32;
-            ctx.drawImage(img, t.x - width / 2, t.y - height / 2.5, width, height);
+            ctx.drawImage(genericImg, t.x - width / 2, t.y + 16 - height, width, height);
           } else {
-            ctx.fillStyle = t.owner === 'PLAYER' ? '#2563eb' : '#16a34a'; // blue-600 : green-600
+            ctx.fillStyle = t.owner === 'PLAYER' ? '#2563eb' : '#16a34a'; 
             ctx.fillText(isBorder ? 'B' : 'a', t.x, t.y);
           }
         } else if (t.state === 'PLANTED') {
@@ -2653,6 +3045,16 @@ export default function App() {
         }
         drawHP(t.x, t.y + 25, t.hp, 100, '#ef4444');
       });
+
+      // Apply Ambient Lighting
+      if (currentPhase === 1 && fase1Map && fase1Map.map && fase1Map.map.ambientLight) {
+        ctx.fillStyle = fase1Map.map.ambientLight.color;
+        ctx.globalAlpha = 1 - fase1Map.map.ambientLight.intensity;
+        ctx.fillRect(-WORLD_WIDTH, -WORLD_HEIGHT, WORLD_WIDTH * 3, WORLD_HEIGHT * 3);
+        ctx.globalAlpha = 1.0;
+      }
+
+      ctx.restore(); // Restore camera transform and prevent memory leak!
     };
 
     animationId = requestAnimationFrame(loop);

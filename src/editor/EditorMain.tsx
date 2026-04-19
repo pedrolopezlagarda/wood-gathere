@@ -1697,7 +1697,7 @@ export default function App() {
         }
       }
     }
-  }, [map, config.showGrid, customTiles, animationFrame]);
+  }, [map, config.showGrid, customTiles, animationFrame, tileMetadata, tileGroups]);
 
   // Catch-all migration for lighting and shadows
   useEffect(() => {
@@ -2115,55 +2115,21 @@ export default function App() {
                               {layer.type === 'ground' ? 'Suelo' : 'Objeto'}
                             </button>
                           )}
-                          {layer.groupId && tileGroups[layer.groupId] ? (
-                            <span className="text-accent lowercase flex items-center gap-1">
-                              <Layers size={8} /> {tileGroups[layer.groupId].name}
-                            </span>
-                          ) : (
-                            Object.keys(tileGroups).length > 0 && (
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const selectedGroupId = Object.keys(tileGroups).find(id => id === config.selectedTile);
-                                  if (selectedGroupId) linkLayerToGroup(layer.id, selectedGroupId);
-                                }}
-                                className="text-gray-600 hover:text-accent transition-colors lowercase flex items-center gap-1"
-                                title="Vincular al grupo seleccionado"
-                              >
-                                <Plus size={8} /> Vincular Grupo
-                              </button>
-                            )
-                          )}
                           {layer.locked && <span className="text-red-400">Bloqueada</span>}
                         </div>
-                        {/* Group or Content Tiles Preview */}
-                        {layer.groupId && tileGroups[layer.groupId] ? (
-                          <div className="flex gap-0.5 mt-1">
-                            {tileGroups[layer.groupId].tiles.slice(0, 5).map((tId, i) => (
-                              <div 
-                                key={i} 
-                                className="w-2 h-2 rounded-full border border-white/10" 
-                                style={{ backgroundColor: TILE_TYPES[tId]?.color || '#333' }}
-                              />
-                            ))}
-                            {tileGroups[layer.groupId].tiles.length > 5 && (
-                              <span className="text-[6px] text-gray-600">+{tileGroups[layer.groupId].tiles.length - 5}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex gap-0.5 mt-1">
-                            {getLayerSummary(layer).slice(0, 5).map((tId, i) => (
-                              <div 
-                                key={i} 
-                                className="w-2 h-2 rounded-sm border border-white/10" 
-                                style={{ backgroundColor: TILE_TYPES[tId]?.color || '#333' }}
-                              />
-                            ))}
-                            {getLayerSummary(layer).length > 5 && (
-                              <span className="text-[6px] text-gray-600">+{getLayerSummary(layer).length - 5}</span>
-                            )}
-                          </div>
-                        )}
+                        {/* Content Tiles Preview */}
+                        <div className="flex gap-0.5 mt-1">
+                          {getLayerSummary(layer).slice(0, 5).map((tId, i) => (
+                            <div 
+                              key={i} 
+                              className="w-2 h-2 rounded-sm border border-white/10" 
+                              style={{ backgroundColor: TILE_TYPES[tId]?.color || '#333' }}
+                            />
+                          ))}
+                          {getLayerSummary(layer).length > 5 && (
+                            <span className="text-[6px] text-gray-600">+{getLayerSummary(layer).length - 5}</span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2220,125 +2186,160 @@ export default function App() {
                     <button onClick={() => setConfig({ ...config, selectedTile: id })} className={`w-full aspect-square rounded border-2 transition-all overflow-hidden ${config.selectedTile === id ? 'border-accent scale-105 shadow-lg shadow-accent/20' : 'border-transparent hover:border-gray-600'}`}>
                       <img src={url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     </button>
-                    <div className="absolute inset-0 bg-black/60 rounded flex flex-wrap content-center justify-center gap-1 p-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
-                      <button 
-                        onClick={() => {
-                          const currentPrio = tileMetadata[id]?.priority ?? 1;
-                          setTileMetadata(prev => ({ ...prev, [id]: { ...prev[id], priority: currentPrio === 0 ? 1 : 0 } }));
-                        }}
-                        className={`rounded-full p-0.5 text-white ${ (tileMetadata[id]?.priority ?? 1) === 0 ? 'bg-blue-500' : 'bg-orange-500'}`}
-                        title={(tileMetadata[id]?.priority ?? 1) === 0 ? "Capa: Fondo" : "Capa: Superficie"}
-                      >
-                        {(tileMetadata[id]?.priority ?? 1) === 0 ? <Waves size={10} /> : <Trees size={10} />}
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setTileMetadata(prev => ({ 
-                            ...prev, 
-                            [id]: { ...prev[id], hasShadow: !prev[id]?.hasShadow } 
-                          }));
-                        }}
-                        className={`rounded-full p-0.5 text-white ${tileMetadata[id]?.hasShadow ? 'bg-indigo-500' : 'bg-gray-500'}`}
-                        title="Alternar Sombra Dinámica"
-                      >
-                        <Moon size={10} />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setTileMetadata(prev => ({ 
-                            ...prev, 
-                            [id]: { ...prev[id], sway: !prev[id]?.sway } 
-                          }));
-                        }}
-                        className={`rounded-full p-0.5 text-white ${tileMetadata[id]?.sway ? 'bg-teal-500' : 'bg-gray-500'}`}
-                        title="Alternar Movimiento del Viento"
-                      >
-                        <Wind size={10} />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setTileMetadata(prev => ({ 
-                            ...prev, 
-                            [id]: { ...prev[id], isWall: !prev[id]?.isWall } 
-                          }));
-                        }}
-                        className={`rounded-full p-0.5 text-white ${tileMetadata[id]?.isWall ? 'bg-red-600' : 'bg-gray-500'}`}
-                        title="Marcar como Muro (Bloquea el paso en el juego)"
-                      >
-                        <Square size={10} />
-                      </button>
-                      <button 
-                        onClick={() => transformSprite(id, 'rotate')}
-                        className="bg-gray-600 text-white rounded-full p-0.5 hover:bg-gray-500"
-                        title="Rotar 90°"
-                      >
-                        <RotateCw size={10} />
-                      </button>
-                      <button 
-                        onClick={() => transformSprite(id, 'flipH')}
-                        className="bg-gray-600 text-white rounded-full p-0.5 hover:bg-gray-500"
-                        title="Reflejo Horizontal"
-                      >
-                        <FlipHorizontal size={10} />
-                      </button>
-                      <button 
-                        onClick={() => transformSprite(id, 'flipV')}
-                        className="bg-gray-600 text-white rounded-full p-0.5 hover:bg-gray-500"
-                        title="Reflejo Vertical"
-                      >
-                        <FlipVertical size={10} />
-                      </button>
-                      <button 
-                        onClick={() => duplicateSprite(id)}
-                        className="bg-blue-600 text-white rounded-full p-0.5 hover:bg-blue-500"
-                        title="Duplicar Sprite"
-                      >
-                        <Copy size={10} />
-                      </button>
-                      <button onClick={() => { const next = { ...customTiles }; delete next[id]; setCustomTiles(next); }} className="bg-red-500 text-white rounded-full p-0.5"><Trash2 size={10} /></button>
-                    </div>
-                    <div className="flex items-center gap-1 mt-1">
-                      <select 
-                        value={(tileMetadata[id] as any)?.role || 'none'}
-                        onChange={(e) => {
-                          const role = e.target.value as TileRole;
-                          setTileMetadata(prev => ({ ...prev, [id]: { ...prev[id], role } }));
-                        }}
-                        className="bg-gray-800 text-[8px] text-gray-300 rounded px-1 py-0.5 border-none focus:ring-1 focus:ring-accent w-full"
-                      >
-                        {Object.entries(TILE_ROLES).map(([role, info]) => (
-                          <option key={role} value={role}>{info.icon} {info.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[8px] text-gray-500" title="Ajuste Offset de la Base/Sombra">Offset</span>
-                      <input 
-                        type="number"
-                        placeholder="X"
-                        className="bg-gray-800 text-[8px] text-gray-300 rounded px-1 py-0.5 border-none focus:ring-1 focus:ring-accent w-full"
-                        value={(tileMetadata[id] as any)?.shadowOffsetX || 0}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          setTileMetadata(prev => ({ ...prev, [id]: { ...prev[id], shadowOffsetX: val } }));
-                        }}
-                        title="Desplazamiento horizontal (X)"
-                      />
-                      <input 
-                        type="number"
-                        placeholder="Y"
-                        className="bg-gray-800 text-[8px] text-gray-300 rounded px-1 py-0.5 border-none focus:ring-1 focus:ring-accent w-full"
-                        value={(tileMetadata[id] as any)?.shadowOffsetY || 0}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          setTileMetadata(prev => ({ ...prev, [id]: { ...prev[id], shadowOffsetY: val } }));
-                        }}
-                        title="Desplazamiento vertical (Y) positivo baja, negativo sube"
-                      />
-                    </div>
                   </div>
                 ))}
               </div>
+
+              {/* INSPECTOR PANEL */}
+              {config.selectedTile && customTiles[config.selectedTile] && (
+                <div className="mt-4 p-3 bg-black/20 rounded border border-white/5 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                    <h4 className="text-[10px] font-bold text-accent uppercase tracking-widest flex items-center gap-1">
+                      <Settings size={12} />
+                      Inspector
+                    </h4>
+                    <span className="text-[8px] text-gray-500 font-mono">{config.selectedTile}</span>
+                  </div>
+
+                  {/* Físicas y Renderizado */}
+                  <div className="grid grid-cols-4 gap-1">
+                    <button 
+                      onClick={() => setTileMetadata(prev => ({ ...prev, [config.selectedTile]: { ...prev[config.selectedTile], isWall: !prev[config.selectedTile]?.isWall } }))}
+                      className={`flex flex-col items-center justify-center py-2 rounded text-[8px] font-bold uppercase transition-colors ${tileMetadata[config.selectedTile]?.isWall ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-gray-800 text-gray-500 hover:bg-gray-700'}`}
+                      title="Muro (Bloquea Objetos)"
+                    >
+                      <Square size={12} className="mb-1" />
+                      Muro
+                    </button>
+                    <button 
+                      onClick={() => setTileMetadata(prev => ({ ...prev, [config.selectedTile]: { ...prev[config.selectedTile], hasShadow: !prev[config.selectedTile]?.hasShadow } }))}
+                      className={`flex flex-col items-center justify-center py-2 rounded text-[8px] font-bold uppercase transition-colors ${tileMetadata[config.selectedTile]?.hasShadow ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-gray-800 text-gray-500 hover:bg-gray-700'}`}
+                      title="Sombra de Contacto y Dinámica"
+                    >
+                      <Moon size={12} className="mb-1" />
+                      Sombra
+                    </button>
+                    <button 
+                      onClick={() => setTileMetadata(prev => ({ ...prev, [config.selectedTile]: { ...prev[config.selectedTile], sway: !prev[config.selectedTile]?.sway } }))}
+                      className={`flex flex-col items-center justify-center py-2 rounded text-[8px] font-bold uppercase transition-colors ${tileMetadata[config.selectedTile]?.sway ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30' : 'bg-gray-800 text-gray-500 hover:bg-gray-700'}`}
+                      title="Efecto de Viento"
+                    >
+                      <Wind size={12} className="mb-1" />
+                      Viento
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const currentPrio = tileMetadata[config.selectedTile]?.priority ?? 1;
+                        setTileMetadata(prev => ({ ...prev, [config.selectedTile]: { ...prev[config.selectedTile], priority: currentPrio === 0 ? 1 : 0 } }));
+                      }}
+                      className={`flex flex-col items-center justify-center py-2 rounded text-[8px] font-bold uppercase transition-colors ${(tileMetadata[config.selectedTile]?.priority ?? 1) === 0 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'}`}
+                      title="Prioridad de Pintado (Fondo vs Puntero)"
+                    >
+                      {(tileMetadata[config.selectedTile]?.priority ?? 1) === 0 ? <Waves size={12} className="mb-1" /> : <Trees size={12} className="mb-1" />}
+                      {(tileMetadata[config.selectedTile]?.priority ?? 1) === 0 ? 'Fondo' : 'Cima'}
+                    </button>
+                  </div>
+
+                  {/* Lógica de Juego (Entity Type) */}
+                  <div className="space-y-1 pt-1 border-t border-white/5">
+                    <label className="text-[9px] text-gray-400 font-bold uppercase">Entidad de Juego (Lógica)</label>
+                    <select 
+                      value={tileMetadata[config.selectedTile]?.entityType || 'NONE'}
+                      onChange={(e) => {
+                        const entityType = e.target.value as any;
+                        setTileMetadata(prev => ({ ...prev, [config.selectedTile]: { ...prev[config.selectedTile], entityType } }));
+                      }}
+                      className="w-full bg-gray-800 text-white text-xs rounded p-1.5 border border-gray-700 focus:outline-none focus:border-accent"
+                    >
+                      <option value="NONE">🌳 Prop Recreativo (Puro Arte)</option>
+                      <option value="TOWN_HALL">🏚️ Pueblo Inicial (House Spawn)</option>
+                      <option value="WOOD_TREE">🪓 Árbol Recolectable (Madera)</option>
+                      <option value="ENEMY_BASE">😈 Base Enemiga (Spawner)</option>
+                      <option value="BUILDING_BUTCHER">🍖 Edificio: Carnicería (Fase 3)</option>
+                      <option value="BUILDING_MARKET">⚖️ Edificio: Mercado (Fase 4)</option>
+                      <option value="BUILDING_FORTRESS">🏰 Edificio: Fortaleza (Fase 5)</option>
+                      <option value="BUILDING_TOWER">🗼 Edificio: Torre de Vigilancia (Fase 5)</option>
+                    </select>
+                  </div>
+
+                  {/* Auto-Tilings Role */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] text-gray-400 font-bold uppercase">Autotiling Role</label>
+                    <select 
+                      value={(tileMetadata[config.selectedTile] as any)?.role || 'none'}
+                      onChange={(e) => {
+                        const role = e.target.value as TileRole;
+                        setTileMetadata(prev => ({ ...prev, [config.selectedTile]: { ...prev[config.selectedTile], role } }));
+                      }}
+                      className="w-full bg-gray-800 text-gray-300 text-xs rounded p-1.5 border border-gray-700 focus:outline-none focus:border-accent"
+                    >
+                      {Object.entries(TILE_ROLES).map(([role, info]) => (
+                        <option key={role} value={role}>{info.icon} {info.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Posicionamiento */}
+                  <div className="flex gap-2 items-center">
+                    <span className="text-[9px] text-gray-400 font-bold uppercase w-12">Offset</span>
+                    <div className="flex-1 flex gap-1">
+                      <div className="flex items-center bg-gray-800 rounded px-1 flex-1">
+                        <span className="text-gray-500 text-[10px]">X:</span>
+                        <input 
+                          type="number"
+                          className="bg-transparent text-xs text-white w-full p-1 text-center focus:outline-none"
+                          value={tileMetadata[config.selectedTile]?.shadowOffsetX || 0}
+                          onChange={(e) => setTileMetadata(prev => ({ ...prev, [config.selectedTile]: { ...prev[config.selectedTile], shadowOffsetX: parseInt(e.target.value) || 0 } }))}
+                        />
+                      </div>
+                      <div className="flex items-center bg-gray-800 rounded px-1 flex-1">
+                        <span className="text-gray-500 text-[10px]">Y:</span>
+                        <input 
+                          type="number"
+                          className="bg-transparent text-xs text-white w-full p-1 text-center focus:outline-none"
+                          value={tileMetadata[config.selectedTile]?.shadowOffsetY || 0}
+                          onChange={(e) => setTileMetadata(prev => ({ ...prev, [config.selectedTile]: { ...prev[config.selectedTile], shadowOffsetY: parseInt(e.target.value) || 0 } }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Herramientas de Edición */}
+                  <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                    <div className="flex gap-1">
+                      <button onClick={() => transformSprite(config.selectedTile, 'rotate')} className="bg-gray-800 text-gray-300 rounded p-1.5 hover:bg-gray-700 hover:text-white" title="Rotar 90°"><RotateCw size={12} /></button>
+                      <button onClick={() => transformSprite(config.selectedTile, 'flipH')} className="bg-gray-800 text-gray-300 rounded p-1.5 hover:bg-gray-700 hover:text-white" title="Espejo Horizontal"><FlipHorizontal size={12} /></button>
+                      <button onClick={() => transformSprite(config.selectedTile, 'flipV')} className="bg-gray-800 text-gray-300 rounded p-1.5 hover:bg-gray-700 hover:text-white" title="Espejo Vertical"><FlipVertical size={12} /></button>
+                      <button onClick={() => duplicateSprite(config.selectedTile)} className="bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded p-1.5 hover:bg-blue-500/30" title="Duplicar Sprite"><Copy size={12} /></button>
+                    </div>
+                    <button 
+                      onClick={() => { 
+                        const next = { ...customTiles }; 
+                        delete next[config.selectedTile]; 
+                        setCustomTiles(next);
+                        
+                        // Clean up tile from any exact group listings to prevent crash
+                        setTileGroups(prev => {
+                          const nextGroups = { ...prev };
+                          Object.keys(nextGroups).forEach(gid => {
+                            nextGroups[gid].tiles = nextGroups[gid].tiles.filter(t => t !== config.selectedTile);
+                          });
+                          return nextGroups;
+                        });
+
+                        if (Object.keys(next).length > 0) {
+                          setConfig(prev => ({...prev, selectedTile: Object.keys(next)[0]}));
+                        } else {
+                          setConfig(prev => ({...prev, selectedTile: 'grass'}));
+                        }
+                      }} 
+                      className="bg-red-500/10 text-red-500 rounded p-1.5 hover:bg-red-500 hover:text-white flex gap-1 items-center font-bold text-[9px] uppercase"
+                    >
+                      <Trash2 size={12} /> Eliminar
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section>
@@ -2405,16 +2406,9 @@ export default function App() {
                           }
                         }}
                         className="text-green-500 hover:bg-green-500/10 p-1 rounded transition-colors"
-                        title="Añadir tile seleccionado"
+                        title="Añadir tile seleccionado a este grupo"
                       >
                         <Plus size={14} />
-                      </button>
-                      <button 
-                        onClick={() => addLayer('ground', id)}
-                        className="text-accent hover:bg-accent/10 p-1 rounded transition-colors"
-                        title="Crear Capa desde Grupo"
-                      >
-                        <Save size={14} />
                       </button>
                       <button 
                         onClick={() => {
